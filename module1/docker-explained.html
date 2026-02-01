@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Pipeline Deep Dive</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --docker-blue: #2496ED;
+            --postgres-blue: #336791;
+            --python-yellow: #FFD43B;
+            --network-green: #00D084;
+            --bg-dark: #1a1a2e;
+            --bg-card: #16213e;
+            --text-light: #eaeaea;
+            --text-muted: #a0a0a0;
+            --accent: #e94560;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-light);
+            line-height: 1.7;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(22, 33, 62, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        nav ul {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            list-style: none;
+            flex-wrap: wrap;
+        }
+
+        nav a {
+            color: var(--text-light);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        nav a:hover, nav a.active {
+            background: var(--docker-blue);
+        }
+
+        /* Main content */
+        main {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 6rem 2rem 2rem;
+        }
+
+        section {
+            margin-bottom: 4rem;
+            padding: 2rem;
+            background: var(--bg-card);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--docker-blue), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        h2 {
+            color: var(--docker-blue);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--docker-blue);
+        }
+
+        h3 {
+            color: var(--python-yellow);
+            margin: 1.5rem 0 1rem;
+        }
+
+        /* Jargon tooltips */
+        .jargon {
+            color: var(--python-yellow);
+            cursor: help;
+            border-bottom: 1px dashed var(--python-yellow);
+            position: relative;
+        }
+
+        .jargon:hover::after {
+            content: attr(data-meaning);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            width: max-content;
+            max-width: 300px;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        /* Analogy boxes */
+        .analogy {
+            background: linear-gradient(135deg, rgba(233, 69, 96, 0.1), rgba(36, 150, 237, 0.1));
+            border-left: 4px solid var(--accent);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 0 12px 12px 0;
+        }
+
+        .analogy::before {
+            content: "🏠 Real-World Analogy";
+            display: block;
+            font-weight: bold;
+            color: var(--accent);
+            margin-bottom: 0.75rem;
+        }
+
+        /* Code blocks */
+        .code-block {
+            background: #0d1117;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.9rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .code-block .comment {
+            color: #6a9955;
+        }
+
+        .code-block .keyword {
+            color: #569cd6;
+        }
+
+        .code-block .string {
+            color: #ce9178;
+        }
+
+        .code-block .number {
+            color: #b5cea8;
+        }
+
+        /* Diagram containers */
+        .diagram {
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .diagram-title {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        /* Docker Compose Architecture Diagram */
+        .compose-diagram {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            padding: 2rem;
+        }
+
+        .docker-host {
+            border: 3px dashed var(--docker-blue);
+            border-radius: 20px;
+            padding: 2rem;
+            position: relative;
+            min-width: 600px;
+        }
+
+        .docker-host::before {
+            content: "🐳 Docker Host (Your Computer)";
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: var(--bg-dark);
+            padding: 0 10px;
+            color: var(--docker-blue);
+            font-weight: bold;
+        }
+
+        .container {
+            background: linear-gradient(135deg, rgba(36, 150, 237, 0.2), rgba(36, 150, 237, 0.05));
+            border: 2px solid var(--docker-blue);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem;
+            min-width: 200px;
+            text-align: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(36, 150, 237, 0.3);
+        }
+
+        .container.postgres {
+            border-color: var(--postgres-blue);
+            background: linear-gradient(135deg, rgba(51, 103, 145, 0.3), rgba(51, 103, 145, 0.1));
+        }
+
+        .container.pgadmin {
+            border-color: #f77f00;
+            background: linear-gradient(135deg, rgba(247, 127, 0, 0.2), rgba(247, 127, 0, 0.05));
+        }
+
+        .container.ingest {
+            border-color: var(--python-yellow);
+            background: linear-gradient(135deg, rgba(255, 212, 59, 0.2), rgba(255, 212, 59, 0.05));
+        }
+
+        .container-icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .container-name {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .container-image {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        /* Network visualization */
+        .network-box {
+            border: 2px solid var(--network-green);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-top: 2rem;
+            background: rgba(0, 208, 132, 0.1);
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            align-items: center;
+            position: relative;
+        }
+
+        .network-box::before {
+            content: "🌐 pg-network (Virtual Network)";
+            position: absolute;
+            top: -12px;
+            left: 20px;
+            background: var(--bg-dark);
+            padding: 0 10px;
+            color: var(--network-green);
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .network-node {
+            text-align: center;
+            padding: 1rem;
+        }
+
+        .network-line {
+            width: 80px;
+            height: 3px;
+            background: repeating-linear-gradient(
+                90deg,
+                var(--network-green) 0px,
+                var(--network-green) 10px,
+                transparent 10px,
+                transparent 20px
+            );
+            animation: flow 1s linear infinite;
+        }
+
+        @keyframes flow {
+            from { background-position: 0 0; }
+            to { background-position: 20px 0; }
+        }
+
+        /* Volume visualization */
+        .volumes-section {
+            display: flex;
+            gap: 2rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .volume {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            text-align: center;
+            min-width: 200px;
+        }
+
+        .volume-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .volume-name {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: rgba(255,255,255,0.05);
+            border: none;
+            border-radius: 8px;
+            color: var(--text-light);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.95rem;
+        }
+
+        .tab:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .tab.active {
+            background: var(--docker-blue);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Accordion */
+        .accordion {
+            margin: 1rem 0;
+        }
+
+        .accordion-item {
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+        }
+
+        .accordion-header {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s;
+        }
+
+        .accordion-header:hover {
+            background: rgba(255,255,255,0.05);
+        }
+
+        .accordion-header::after {
+            content: "▼";
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+        }
+
+        .accordion-item.open .accordion-header::after {
+            transform: rotate(180deg);
+        }
+
+        .accordion-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .accordion-item.open .accordion-body {
+            max-height: 2000px;
+        }
+
+        .accordion-content {
+            padding: 1rem 1.5rem;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Step-by-step flow */
+        .flow-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .flow-step {
+            display: flex;
+            gap: 1.5rem;
+            align-items: flex-start;
+            padding: 1.5rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            border-left: 4px solid var(--docker-blue);
+            transition: all 0.3s;
+        }
+
+        .flow-step:hover {
+            background: rgba(255,255,255,0.06);
+            transform: translateX(5px);
+        }
+
+        .step-number {
+            background: var(--docker-blue);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .step-content h4 {
+            color: var(--docker-blue);
+            margin-bottom: 0.5rem;
+        }
+
+        /* Data flow animation */
+        .data-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .flow-box {
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            min-width: 120px;
+        }
+
+        .flow-box.internet {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .flow-box.python {
+            background: linear-gradient(135deg, #FFD43B, #306998);
+            color: #1a1a2e;
+        }
+
+        .flow-box.postgres {
+            background: linear-gradient(135deg, var(--postgres-blue), #1a3d5c);
+        }
+
+        .flow-arrow {
+            font-size: 2rem;
+            color: var(--network-green);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; transform: translateX(0); }
+            50% { opacity: 1; transform: translateX(5px); }
+        }
+
+        /* Port mapping visual */
+        .port-mapping {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 2rem;
+            padding: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .port-side {
+            text-align: center;
+            padding: 1.5rem;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            min-width: 150px;
+        }
+
+        .port-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .port-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        .port-connector {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--network-green);
+        }
+
+        .port-line {
+            width: 50px;
+            height: 3px;
+            background: var(--network-green);
+        }
+
+        /* Comparison table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .comparison-table th {
+            background: rgba(36, 150, 237, 0.2);
+            color: var(--docker-blue);
+        }
+
+        .comparison-table tr:hover {
+            background: rgba(255,255,255,0.03);
+        }
+
+        /* Interactive timeline */
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, var(--docker-blue), var(--postgres-blue), var(--python-yellow));
+        }
+
+        .timeline-item {
+            position: relative;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            margin-left: 20px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -26px;
+            top: 1.75rem;
+            width: 12px;
+            height: 12px;
+            background: var(--docker-blue);
+            border-radius: 50%;
+            border: 3px solid var(--bg-dark);
+        }
+
+        .timeline-item.active::before {
+            background: var(--network-green);
+            box-shadow: 0 0 10px var(--network-green);
+        }
+
+        /* Highlight box */
+        .highlight {
+            background: linear-gradient(135deg, rgba(36, 150, 237, 0.1), rgba(36, 150, 237, 0.05));
+            border: 1px solid rgba(36, 150, 237, 0.3);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .highlight.warning {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
+            border-color: rgba(255, 193, 7, 0.3);
+        }
+
+        .highlight.success {
+            background: linear-gradient(135deg, rgba(0, 208, 132, 0.1), rgba(0, 208, 132, 0.05));
+            border-color: rgba(0, 208, 132, 0.3);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .docker-host {
+                min-width: auto;
+            }
+
+            nav ul {
+                gap: 0.5rem;
+            }
+
+            nav a {
+                padding: 0.4rem 0.8rem;
+                font-size: 0.9rem;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+        }
+
+        /* Ingest Diagram */
+        .ingest-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        .ingest-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .chunk-visual {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .chunk {
+            width: 40px;
+            height: 30px;
+            background: var(--python-yellow);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            color: #1a1a2e;
+            font-weight: bold;
+            animation: chunkLoad 2s infinite;
+        }
+
+        .chunk:nth-child(2) { animation-delay: 0.2s; }
+        .chunk:nth-child(3) { animation-delay: 0.4s; }
+        .chunk:nth-child(4) { animation-delay: 0.6s; }
+        .chunk:nth-child(5) { animation-delay: 0.8s; }
+
+        @keyframes chunkLoad {
+            0%, 100% { opacity: 0.3; transform: scale(0.9); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+
+        /* Glossary */
+        .glossary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .glossary-item {
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border-left: 3px solid var(--docker-blue);
+        }
+
+        .glossary-term {
+            color: var(--python-yellow);
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .glossary-def {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <ul>
+            <li><a href="#overview" class="active">Overview</a></li>
+            <li><a href="#compose">Docker Compose</a></li>
+            <li><a href="#networking">Networking</a></li>
+            <li><a href="#dockerfile">Dockerfile</a></li>
+            <li><a href="#ingest">Data Ingest</a></li>
+            <li><a href="#glossary">Glossary</a></li>
+        </ul>
+    </nav>
+
+    <main>
+        <!-- HERO SECTION -->
+        <section id="overview">
+            <h1>🐳 Docker Pipeline Deep Dive</h1>
+            <p style="text-align: center; color: var(--text-muted); margin-bottom: 2rem;">
+                Understanding your NYC Taxi Data Pipeline from the ground up
+            </p>
+
+            <div class="analogy">
+                Think of Docker like a <strong>shipping container system</strong> for software. Just like how shipping containers revolutionized global trade by providing a standardized way to transport any goods, Docker containers provide a standardized way to package and run any software. Your PostgreSQL database, pgAdmin, and Python script each get their own "shipping container" that works the same way everywhere.
+            </div>
+
+            <h3>The Big Picture</h3>
+            <p>Your pipeline consists of <strong>three main components</strong> that work together:</p>
+
+            <div class="diagram">
+                <div class="diagram-title">Complete Pipeline Architecture</div>
+                <div class="compose-diagram">
+                    <div class="docker-host">
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center;">
+                            <div class="container postgres">
+                                <div class="container-icon">🐘</div>
+                                <div class="container-name">pgdatabase</div>
+                                <div class="container-image">postgres:16</div>
+                                <div style="margin-top: 0.5rem; font-size: 0.8rem;">Stores all the taxi data</div>
+                            </div>
+                            <div class="container pgadmin">
+                                <div class="container-icon">🖥️</div>
+                                <div class="container-name">pgadmin</div>
+                                <div class="container-image">dpage/pgadmin4</div>
+                                <div style="margin-top: 0.5rem; font-size: 0.8rem;">Web UI to view database</div>
+                            </div>
+                            <div class="container ingest">
+                                <div class="container-icon">🐍</div>
+                                <div class="container-name">taxi_ingest</div>
+                                <div class="container-image">taxi_ingest:v001</div>
+                                <div style="margin-top: 0.5rem; font-size: 0.8rem;">Downloads & loads data</div>
+                            </div>
+                        </div>
+
+                        <div class="network-box">
+                            <div class="network-node">
+                                <div>🐘 pgdatabase</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">:5432</div>
+                            </div>
+                            <div class="network-line"></div>
+                            <div class="network-node">
+                                <div>🖥️ pgadmin</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">:80</div>
+                            </div>
+                            <div class="network-line"></div>
+                            <div class="network-node">
+                                <div>🐍 taxi_ingest</div>
+                                <div style="font-size: 0.8rem; color: var(--text-muted);">(temporary)</div>
+                            </div>
+                        </div>
+
+                        <div class="volumes-section">
+                            <div class="volume">
+                                <div class="volume-icon">💾</div>
+                                <div>ny_taxi_postgres_data</div>
+                                <div class="volume-name">Database files survive restarts</div>
+                            </div>
+                            <div class="volume">
+                                <div class="volume-icon">💾</div>
+                                <div>pgadmin_data</div>
+                                <div class="volume-name">pgAdmin settings survive restarts</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight">
+                <strong>💡 Key Insight:</strong> The <code>docker-compose.yaml</code> starts PostgreSQL and pgAdmin as long-running services. The <code>docker run</code> command runs your Python script as a <em>one-time job</em> that connects to the same network to load data.
+            </div>
+        </section>
+
+        <!-- DOCKER COMPOSE SECTION -->
+        <section id="compose">
+            <h2>📦 Docker Compose Explained</h2>
+
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('compose', 'what')">What It Does</button>
+                <button class="tab" onclick="showTab('compose', 'line')">Line by Line</button>
+                <button class="tab" onclick="showTab('compose', 'lifecycle')">Lifecycle</button>
+            </div>
+
+            <div id="compose-what" class="tab-content active">
+                <div class="analogy">
+                    Docker Compose is like an <strong>orchestra conductor's sheet music</strong>. Instead of telling each musician (container) individually when to play, the conductor reads from one master score that coordinates everyone. Your <code>docker-compose.yaml</code> is that master score - it defines all your containers and how they work together.
+                </div>
+
+                <h3>What Happens When You Run <code>docker-compose up</code></h3>
+
+                <div class="flow-steps">
+                    <div class="flow-step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>Parse the YAML File</h4>
+                            <p>Docker reads your <code>docker-compose.yaml</code> and understands you want 2 services (pgdatabase, pgadmin), 1 network (pg-network), and 2 volumes for data persistence.</p>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>Create the Network</h4>
+                            <p>Docker creates a virtual network called <code>pg-network</code>. This is like setting up a private phone line between your containers - they can talk to each other by name.</p>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4>Create the Volumes</h4>
+                            <p>Docker creates two storage spaces on your computer. These are like external hard drives - even if you delete the containers, the data remains safe.</p>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h4>Pull Images (if needed)</h4>
+                            <p>Docker downloads <code>postgres:16</code> and <code>dpage/pgadmin4</code> from Docker Hub (like an app store for containers). This only happens the first time.</p>
+                        </div>
+                    </div>
+                    <div class="flow-step">
+                        <div class="step-number">5</div>
+                        <div class="step-content">
+                            <h4>Start Containers</h4>
+                            <p>Docker starts both containers, connecting them to the network and volumes. PostgreSQL initializes the database, pgAdmin starts its web server.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="compose-line" class="tab-content">
+                <h3>Complete File Breakdown</h3>
+
+                <div class="accordion">
+                    <div class="accordion-item open">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span>🐘 PostgreSQL Service (pgdatabase)</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <div class="code-block">
+<span class="keyword">pgdatabase:</span>
+  <span class="keyword">image:</span> <span class="string">postgres:16</span>              <span class="comment"># Use PostgreSQL version 16 from Docker Hub</span>
+  <span class="keyword">environment:</span>                         <span class="comment"># Set environment variables inside container</span>
+    - <span class="string">POSTGRES_USER=root</span>            <span class="comment"># Database superuser name</span>
+    - <span class="string">POSTGRES_PASSWORD=root</span>        <span class="comment"># Database password</span>
+    - <span class="string">POSTGRES_DB=ny_taxi</span>           <span class="comment"># Create this database on startup</span>
+  <span class="keyword">volumes:</span>
+    - <span class="string">ny_taxi_postgres_data:/var/lib/postgresql/data</span>  <span class="comment"># Persist data</span>
+  <span class="keyword">ports:</span>
+    - <span class="string">"5432:5432"</span>                   <span class="comment"># Expose port to host machine</span>
+  <span class="keyword">networks:</span>
+    - <span class="string">pg-network</span>                    <span class="comment"># Join this virtual network</span>
+                                </div>
+
+                                <div class="highlight">
+                                    <strong>🔑 Environment Variables:</strong> These are like configuration settings passed to the container. PostgreSQL reads these on startup to create the user, set the password, and create the initial database.
+                                </div>
+
+                                <div class="analogy">
+                                    Think of <span class="jargon" data-meaning="Environment variables are key-value pairs that configure how a program runs, like settings you pass to an app">environment variables</span> like filling out a form before a restaurant opens. You're telling PostgreSQL: "When you open, create an account named 'root', use this password, and set up a database called 'ny_taxi' ready for customers."
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span>🖥️ pgAdmin Service</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <div class="code-block">
+<span class="keyword">pgadmin:</span>
+  <span class="keyword">image:</span> <span class="string">dpage/pgadmin4</span>             <span class="comment"># Web-based PostgreSQL admin tool</span>
+  <span class="keyword">environment:</span>
+    - <span class="string">PGADMIN_DEFAULT_EMAIL=admin@admin.com</span>   <span class="comment"># Login email</span>
+    - <span class="string">PGADMIN_DEFAULT_PASSWORD=root</span>          <span class="comment"># Login password</span>
+  <span class="keyword">volumes:</span>
+    - <span class="string">pgadmin_data:/var/lib/pgadmin</span>  <span class="comment"># Save settings/connections</span>
+  <span class="keyword">ports:</span>
+    - <span class="string">"8085:80"</span>                      <span class="comment"># Map host:8085 → container:80</span>
+  <span class="keyword">networks:</span>
+    - <span class="string">pg-network</span>
+                                </div>
+
+                                <p style="margin-top: 1rem;">pgAdmin runs a web server on port 80 <em>inside</em> the container. We map it to port 8085 on your computer so you can access it at <code>http://localhost:8085</code>.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span>💾 Volumes (Data Persistence)</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <div class="code-block">
+<span class="keyword">volumes:</span>
+  <span class="string">ny_taxi_postgres_data:</span>   <span class="comment"># Named volume for PostgreSQL</span>
+  <span class="string">pgadmin_data:</span>            <span class="comment"># Named volume for pgAdmin</span>
+                                </div>
+
+                                <div class="analogy">
+                                    <strong>Without volumes:</strong> Imagine you built an incredible sandcastle (your database with millions of rows). Then the tide comes in (you run <code>docker-compose down</code>). Everything is washed away. 😢<br><br>
+                                    <strong>With volumes:</strong> You built your sandcastle on a platform that rises above the water. The tide comes and goes, but your castle stays safe. The volume is that platform - it stores your data outside the container.
+                                </div>
+
+                                <p>The syntax <code>ny_taxi_postgres_data:/var/lib/postgresql/data</code> means:</p>
+                                <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                                    <li><strong>Left side:</strong> The volume name on your host machine</li>
+                                    <li><strong>Right side:</strong> Where PostgreSQL stores its files inside the container</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span>🌐 Networks</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <div class="code-block">
+<span class="keyword">networks:</span>
+  <span class="keyword">pg-network:</span>
+    <span class="keyword">name:</span> <span class="string">pg-network</span>    <span class="comment"># Explicit name (important for external containers)</span>
+                                </div>
+
+                                <div class="highlight warning">
+                                    <strong>⚠️ Why <code>name: pg-network</code> matters:</strong> Without the explicit name, Docker Compose would create a network called <code>pipeline_pg-network</code> (prefixed with the directory name). By setting <code>name: pg-network</code>, we ensure any external container can join using <code>--network=pg-network</code>.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="compose-lifecycle" class="tab-content">
+                <h3>Container Lifecycle Commands</h3>
+
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Command</th>
+                            <th>What It Does</th>
+                            <th>Data Preserved?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>docker-compose up</code></td>
+                            <td>Start all services in foreground (see logs)</td>
+                            <td>✅ Yes</td>
+                        </tr>
+                        <tr>
+                            <td><code>docker-compose up -d</code></td>
+                            <td>Start in <span class="jargon" data-meaning="Detached mode runs containers in the background, freeing your terminal">detached mode</span> (background)</td>
+                            <td>✅ Yes</td>
+                        </tr>
+                        <tr>
+                            <td><code>docker-compose stop</code></td>
+                            <td>Stop containers but keep them</td>
+                            <td>✅ Yes</td>
+                        </tr>
+                        <tr>
+                            <td><code>docker-compose down</code></td>
+                            <td>Stop and remove containers</td>
+                            <td>✅ Yes (volumes kept)</td>
+                        </tr>
+                        <tr>
+                            <td><code>docker-compose down -v</code></td>
+                            <td>Stop, remove containers AND volumes</td>
+                            <td>❌ NO - Data deleted!</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="analogy">
+                    Think of these commands like managing a store:<br>
+                    • <strong>up</strong> = Open the store for business<br>
+                    • <strong>stop</strong> = Close for the night (inventory stays)<br>
+                    • <strong>down</strong> = Close temporarily (inventory in warehouse)<br>
+                    • <strong>down -v</strong> = Going out of business sale - everything goes!
+                </div>
+            </div>
+        </section>
+
+        <!-- NETWORKING SECTION -->
+        <section id="networking">
+            <h2>🌐 Docker Networking Deep Dive</h2>
+
+            <div class="analogy">
+                Imagine Docker networks as <strong>private office buildings</strong>. Each building (network) has its own internal phone system. People in the same building can call each other by name ("Hey pgdatabase!"). But someone outside the building needs to know the building's address and use the public phone number (port mapping) to reach anyone inside.
+            </div>
+
+            <h3>How Containers Find Each Other</h3>
+
+            <div class="diagram">
+                <div class="diagram-title">DNS Resolution Inside pg-network</div>
+                <div class="port-mapping">
+                    <div class="port-side">
+                        <div style="font-size: 2rem;">🐍</div>
+                        <div>taxi_ingest</div>
+                        <div class="port-label">Wants to connect to database</div>
+                    </div>
+                    <div class="port-connector">
+                        <span style="font-size: 0.9rem;">DNS lookup</span>
+                        <div class="port-line"></div>
+                        <span>→</span>
+                    </div>
+                    <div class="port-side">
+                        <div style="font-size: 2rem;">🔍</div>
+                        <div>Docker DNS</div>
+                        <div class="port-label">"pgdatabase" → 172.18.0.2</div>
+                    </div>
+                    <div class="port-connector">
+                        <span>→</span>
+                        <div class="port-line"></div>
+                    </div>
+                    <div class="port-side">
+                        <div style="font-size: 2rem;">🐘</div>
+                        <div>pgdatabase</div>
+                        <div class="port-label">172.18.0.2:5432</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight success">
+                <strong>✨ Magic of Docker DNS:</strong> When you use <code>--pg-host=pgdatabase</code> in your docker run command, Docker's built-in DNS server automatically resolves "pgdatabase" to the container's IP address. No need to know the actual IP!
+            </div>
+
+            <h3>Port Mapping Explained</h3>
+
+            <div class="diagram">
+                <div class="diagram-title">Port Mapping: Host ↔ Container</div>
+                <div class="port-mapping">
+                    <div class="port-side" style="background: rgba(233, 69, 96, 0.1);">
+                        <div style="color: var(--accent); font-size: 0.9rem;">YOUR COMPUTER</div>
+                        <div class="port-number">5432</div>
+                        <div class="port-label">localhost:5432</div>
+                    </div>
+                    <div class="port-connector">
+                        <div class="port-line" style="background: var(--accent);"></div>
+                        <span style="color: var(--accent);">↔</span>
+                        <div class="port-line" style="background: var(--accent);"></div>
+                    </div>
+                    <div class="port-side" style="background: rgba(51, 103, 145, 0.2);">
+                        <div style="color: var(--postgres-blue); font-size: 0.9rem;">CONTAINER</div>
+                        <div class="port-number" style="color: var(--postgres-blue);">5432</div>
+                        <div class="port-label">pgdatabase:5432</div>
+                    </div>
+                </div>
+                <p style="text-align: center; margin-top: 1rem; color: var(--text-muted);">
+                    The format is <code>"HOST_PORT:CONTAINER_PORT"</code>
+                </p>
+            </div>
+
+            <div class="code-block">
+<span class="comment"># From your HOST machine (your computer), you can connect with:</span>
+psql -h <span class="string">localhost</span> -p <span class="number">5432</span> -U root -d ny_taxi
+
+<span class="comment"># From INSIDE another container on pg-network:</span>
+psql -h <span class="string">pgdatabase</span> -p <span class="number">5432</span> -U root -d ny_taxi
+                            </div>
+
+            <h3>Why Use a Custom Network?</h3>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Default Bridge Network</th>
+                        <th>Custom Network (pg-network)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>DNS by container name</td>
+                        <td>❌ Must use IP addresses</td>
+                        <td>✅ Use names like "pgdatabase"</td>
+                    </tr>
+                    <tr>
+                        <td>Isolation</td>
+                        <td>All containers can see each other</td>
+                        <td>✅ Only joined containers communicate</td>
+                    </tr>
+                    <tr>
+                        <td>External containers can join</td>
+                        <td>Yes (but no DNS)</td>
+                        <td>✅ Yes with full DNS support</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- DOCKERFILE SECTION -->
+        <section id="dockerfile">
+            <h2>🏗️ Building the Ingest Image</h2>
+
+            <div class="analogy">
+                A <span class="jargon" data-meaning="A text file containing instructions to build a Docker image - like a recipe for creating a container">Dockerfile</span> is like a <strong>recipe card</strong>. It tells Docker exactly how to create your container, step by step. Just like following a recipe creates the same dish every time, a Dockerfile creates the same container environment everywhere.
+            </div>
+
+            <h3>Your Dockerfile Explained</h3>
+
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="code-block">FROM python:3.13.11-slim</div>
+                    <p><strong>Base Image:</strong> Start with a minimal Python 3.13 environment. The <code>-slim</code> variant is smaller (~150MB vs ~1GB) because it excludes development tools you don't need.</p>
+                    <div class="analogy">Like choosing to rent a furnished apartment (Python pre-installed) rather than building from an empty lot.</div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="code-block">COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin</div>
+                    <p><strong>Multi-stage Copy:</strong> This is a <span class="jargon" data-meaning="Copying files from one Docker image into another during build, without needing that image as a base">multi-stage build technique</span>. It grabs just the <code>uv</code> binary from Astral's image and copies it into yours.</p>
+                    <p style="margin-top: 0.5rem;"><strong>What is uv?</strong> It's an extremely fast Python package manager (10-100x faster than pip), written in Rust.</p>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="code-block">WORKDIR /code
+ENV PATH="/code/.venv/bin:$PATH"</div>
+                    <p><strong>Set up workspace:</strong></p>
+                    <ul style="margin-left: 1.5rem;">
+                        <li><code>WORKDIR /code</code> - All following commands run from /code (like <code>cd /code</code>)</li>
+                        <li><code>ENV PATH=...</code> - Add the virtual environment's bin folder to PATH so Python finds your installed packages</li>
+                    </ul>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="code-block">COPY pyproject.toml .python-version uv.lock ./
+RUN uv sync --locked</div>
+                    <p><strong>Install dependencies:</strong> Copy your project configuration files, then use uv to install all packages. The <code>--locked</code> flag ensures exact versions from <code>uv.lock</code> are used.</p>
+                    <div class="highlight">
+                        <strong>💡 Layer Caching:</strong> By copying dependency files BEFORE the code, Docker can cache this layer. If only <code>ingest_data.py</code> changes, dependencies aren't re-installed!
+                    </div>
+                </div>
+
+                <div class="timeline-item">
+                    <div class="code-block">COPY ingest_data.py .</div>
+                    <p><strong>Copy your code:</strong> Finally, copy your Python script into the image.</p>
+                </div>
+
+                <div class="timeline-item active">
+                    <div class="code-block">ENTRYPOINT ["python", "ingest_data.py"]</div>
+                    <p><strong>Default command:</strong> When the container starts, automatically run this command. Any arguments you pass to <code>docker run</code> get appended to this.</p>
+                </div>
+            </div>
+
+            <h3>Building the Image</h3>
+            <div class="code-block">
+<span class="comment"># Build the image and tag it as taxi_ingest:v001</span>
+docker build -t taxi_ingest:v001 .
+
+<span class="comment"># What happens:</span>
+<span class="comment"># 1. Docker reads the Dockerfile</span>
+<span class="comment"># 2. Executes each instruction as a "layer"</span>
+<span class="comment"># 3. Caches layers for faster rebuilds</span>
+<span class="comment"># 4. Tags the final image as taxi_ingest:v001</span>
+            </div>
+        </section>
+
+        <!-- DATA INGEST SECTION -->
+        <section id="ingest">
+            <h2>🚕 Data Ingestion Deep Dive</h2>
+
+            <div class="tabs">
+                <button class="tab active" onclick="showTab('ingest', 'cmd')">The Command</button>
+                <button class="tab" onclick="showTab('ingest', 'flow')">Data Flow</button>
+                <button class="tab" onclick="showTab('ingest', 'code')">Python Code</button>
+            </div>
+
+            <div id="ingest-cmd" class="tab-content active">
+                <h3>Breaking Down the Docker Run Command</h3>
+
+                <div class="code-block">
+docker run <span class="keyword">-it</span> <span class="keyword">--rm</span> \
+  <span class="keyword">--network=</span><span class="string">pg-network</span> \
+  <span class="string">taxi_ingest:v001</span> \
+    <span class="keyword">--pg-user=</span><span class="string">root</span> \
+    <span class="keyword">--pg-pass=</span><span class="string">root</span> \
+    <span class="keyword">--pg-host=</span><span class="string">pgdatabase</span> \
+    <span class="keyword">--pg-port=</span><span class="number">5432</span> \
+    <span class="keyword">--pg-db=</span><span class="string">ny_taxi</span> \
+    <span class="keyword">--target-table=</span><span class="string">yellow_taxi_trips_2021_1</span> \
+    <span class="keyword">--chunksize=</span><span class="number">100000</span>
+                </div>
+
+                <div class="accordion">
+                    <div class="accordion-item open">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><code>-it</code> — Interactive Terminal</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <p><code>-i</code> (interactive) + <code>-t</code> (terminal) = You can see output and the progress bar in real-time.</p>
+                                <div class="analogy">Like calling someone on speakerphone (-i lets you hear them, -t lets them hear you) vs sending a voicemail.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><code>--rm</code> — Auto-cleanup</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <p>Automatically delete the container after it finishes. Since this is a one-time data load job, we don't need the container sticking around.</p>
+                                <div class="analogy">Like using a disposable camera for a specific event - take the photos (load the data), then throw away the camera (container). The photos (data in PostgreSQL) remain!</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><code>--network=pg-network</code> — Join the Network</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <p>Connect this container to the same network as PostgreSQL. This enables:</p>
+                                <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                                    <li>Using hostname "pgdatabase" instead of IP address</li>
+                                    <li>Direct container-to-container communication</li>
+                                    <li>Isolation from other Docker containers not on this network</li>
+                                </ul>
+                                <div class="highlight warning">
+                                    <strong>⚠️ Critical:</strong> Without this flag, the container would be on Docker's default bridge network and couldn't find "pgdatabase"!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><code>taxi_ingest:v001</code> — The Image</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <p>The image you built with <code>docker build -t taxi_ingest:v001 .</code></p>
+                                <p><code>taxi_ingest</code> = image name, <code>v001</code> = tag (version)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span><code>--pg-*</code> — Arguments to Your Script</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <p>Everything after the image name gets passed to your Python script! Remember the Dockerfile's <code>ENTRYPOINT</code>?</p>
+                                <div class="code-block">
+<span class="comment"># What Docker actually runs:</span>
+python ingest_data.py --pg-user=root --pg-pass=root --pg-host=pgdatabase ...
+                                </div>
+                                <p style="margin-top: 1rem;">These arguments are parsed by <span class="jargon" data-meaning="Click is a Python library for creating command-line interfaces with decorators like @click.option">Click</span> in your Python code.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="ingest-flow" class="tab-content">
+                <h3>Complete Data Flow</h3>
+
+                <div class="diagram">
+                    <div class="diagram-title">From Internet to Database</div>
+                    <div class="data-flow">
+                        <div class="flow-box internet">
+                            <div style="font-size: 1.5rem;">🌐</div>
+                            <div>GitHub</div>
+                            <div style="font-size: 0.75rem;">CSV.gz file</div>
+                        </div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-box python">
+                            <div style="font-size: 1.5rem;">🐍</div>
+                            <div>pandas</div>
+                            <div style="font-size: 0.75rem;">Decompress & Parse</div>
+                        </div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-box" style="background: var(--network-green);">
+                            <div style="font-size: 1.5rem;">📦</div>
+                            <div>Chunks</div>
+                            <div style="font-size: 0.75rem;">100,000 rows each</div>
+                        </div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-box postgres">
+                            <div style="font-size: 1.5rem;">🐘</div>
+                            <div>PostgreSQL</div>
+                            <div style="font-size: 0.75rem;">yellow_taxi_trips</div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>Why Chunking?</h3>
+
+                <div class="diagram">
+                    <div class="diagram-title">Processing in Chunks vs All at Once</div>
+                    <div class="ingest-diagram">
+                        <div class="ingest-row">
+                            <div style="min-width: 100px; text-align: right;">Without chunks:</div>
+                            <div class="flow-box" style="background: var(--accent); min-width: 300px;">
+                                <div>😰 1.3M rows in memory</div>
+                                <div style="font-size: 0.8rem;">~2GB RAM needed</div>
+                            </div>
+                        </div>
+                        <div class="ingest-row">
+                            <div style="min-width: 100px; text-align: right;">With chunks:</div>
+                            <div class="chunk-visual">
+                                <div class="chunk">100K</div>
+                                <div class="chunk">100K</div>
+                                <div class="chunk">100K</div>
+                                <div class="chunk">100K</div>
+                                <div class="chunk">...</div>
+                            </div>
+                            <div style="color: var(--network-green);">✓ ~50MB at a time</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="analogy">
+                    <strong>Moving a library:</strong><br>
+                    • <strong>Without chunks:</strong> Try to carry all 10,000 books at once. You collapse. 📚💀<br>
+                    • <strong>With chunks:</strong> Make 100 trips carrying 100 books each. Slower but you survive! 📚🚶
+                </div>
+            </div>
+
+            <div id="ingest-code" class="tab-content">
+                <h3>Python Code Walkthrough</h3>
+
+                <div class="accordion">
+                    <div class="accordion-item open">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span>📊 Data Type Definitions</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <div class="code-block">
+dtype = {
+    <span class="string">"VendorID"</span>: <span class="string">"Int64"</span>,           <span class="comment"># Nullable integer (capital I)</span>
+    <span class="string">"passenger_count"</span>: <span class="string">"Int64"</span>,
+    <span class="string">"trip_distance"</span>: <span class="string">"float64"</span>,
+    <span class="comment"># ... more fields</span>
+}
+
+parse_dates = [<span class="string">"tpep_pickup_datetime"</span>, <span class="string">"tpep_dropoff_datetime"</span>]
+                                </div>
+                                <div class="highlight">
+                                    <strong>Why <code>Int64</code> (capital I)?</strong> Regular <code>int</code> can't handle NULL/missing values. Pandas' nullable <code>Int64</code> type can represent both numbers AND missing data. The taxi dataset has missing values!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span>🔗 Database Connection (SQLAlchemy)</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <div class="code-block">
+engine = create_engine(
+    <span class="string">f'postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}'</span>
+)
+
+<span class="comment"># With your parameters, this becomes:</span>
+<span class="comment"># postgresql://root:root@pgdatabase:5432/ny_taxi</span>
+                                </div>
+
+                                <p>This <span class="jargon" data-meaning="A connection string is a formatted URL containing all information needed to connect to a database: protocol, credentials, host, port, and database name">connection string</span> format:</p>
+                                <div class="code-block">
+protocol://username:password@hostname:port/database_name
+                                </div>
+
+                                <div class="analogy">
+                                    Think of it like a full mailing address:<br>
+                                    • <strong>postgresql://</strong> = delivery service (FedEx vs UPS)<br>
+                                    • <strong>root:root</strong> = recipient name + apartment code<br>
+                                    • <strong>pgdatabase:5432</strong> = street address + unit number<br>
+                                    • <strong>ny_taxi</strong> = specific mailbox inside
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span>📥 Streaming Data with Iterator</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <div class="code-block">
+df_iter = pd.read_csv(
+    url,                      <span class="comment"># Direct URL - pandas handles download!</span>
+    dtype=dtype,              <span class="comment"># Our column types</span>
+    parse_dates=parse_dates,  <span class="comment"># Convert date strings to datetime</span>
+    iterator=<span class="keyword">True</span>,            <span class="comment"># Don't load everything at once</span>
+    chunksize=<span class="number">100000</span>          <span class="comment"># 100,000 rows per chunk</span>
+)
+                                </div>
+
+                                <p><strong>Key insight:</strong> <code>iterator=True</code> + <code>chunksize</code> means pandas gives you a <span class="jargon" data-meaning="A generator yields values one at a time instead of computing them all upfront - it's lazy evaluation that saves memory">generator</span> instead of a DataFrame. No data is loaded until you iterate!</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="accordion-item">
+                        <div class="accordion-header" onclick="toggleAccordion(this)">
+                            <span>🔄 The Insert Loop</span>
+                        </div>
+                        <div class="accordion-body">
+                            <div class="accordion-content">
+                                <div class="code-block">
+first = <span class="keyword">True</span>
+<span class="keyword">for</span> df_chunk <span class="keyword">in</span> tqdm(df_iter):
+    <span class="keyword">if</span> first:
+        <span class="comment"># Create table with correct schema (no data)</span>
+        df_chunk.head(<span class="number">0</span>).to_sql(
+            name=target_table,
+            con=engine,
+            if_exists=<span class="string">'replace'</span>  <span class="comment"># Drop existing table if any</span>
+        )
+        first = <span class="keyword">False</span>
+
+    <span class="comment"># Insert the actual data</span>
+    df_chunk.to_sql(
+        name=target_table,
+        con=engine,
+        if_exists=<span class="string">'append'</span>     <span class="comment"># Add to existing table</span>
+    )
+                                </div>
+
+                                <h4 style="margin-top: 1rem;">Why <code>head(0)</code> first?</h4>
+                                <div class="highlight">
+                                    <code>df_chunk.head(0)</code> returns the DataFrame structure with zero rows. Writing this to SQL creates an empty table with the correct columns and types. Then we append all chunks to this table.
+                                </div>
+
+                                <h4 style="margin-top: 1rem;">What is <code>tqdm</code>?</h4>
+                                <p><span class="jargon" data-meaning="tqdm (Arabic for 'progress') is a Python library that wraps iterables to display a progress bar">tqdm</span> wraps any iterable and shows a progress bar. As each chunk is processed, you see:</p>
+                                <div class="code-block" style="background: #000; color: #0f0;">
+ 45%|████████████░░░░░░░░░| 6/13 [02:15<02:45, 23.58s/it]
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GLOSSARY SECTION -->
+        <section id="glossary">
+            <h2>📖 Glossary of Terms</h2>
+
+            <div class="glossary-grid">
+                <div class="glossary-item">
+                    <div class="glossary-term">Container</div>
+                    <div class="glossary-def">A lightweight, isolated environment that runs an application. Like a virtual machine but shares the host's kernel, making it faster and smaller.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">Image</div>
+                    <div class="glossary-def">A read-only template used to create containers. Think of it as a snapshot or blueprint - you build an image once, then create many containers from it.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">Volume</div>
+                    <div class="glossary-def">Persistent storage that exists outside containers. Data in volumes survives container destruction. Like an external hard drive for Docker.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">Network (Docker)</div>
+                    <div class="glossary-def">A virtual network allowing containers to communicate. Custom networks enable DNS-based discovery (use container names instead of IPs).</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">Port Mapping</div>
+                    <div class="glossary-def">Connecting a port on your host machine to a port inside a container. Format: "HOST:CONTAINER". Allows external access to containerized services.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">ENTRYPOINT</div>
+                    <div class="glossary-def">The default command that runs when a container starts. Additional arguments passed to 'docker run' are appended to this command.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">Docker Compose</div>
+                    <div class="glossary-def">A tool for defining multi-container applications in a YAML file. One command starts/stops all services with their networks and volumes.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">SQLAlchemy Engine</div>
+                    <div class="glossary-def">A Python object that manages database connections. The "engine" is the starting point for any SQLAlchemy application - it knows how to talk to your database.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">DataFrame Iterator</div>
+                    <div class="glossary-def">A pandas object that reads data in chunks instead of all at once. Memory-efficient for large files that won't fit in RAM.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">Connection String</div>
+                    <div class="glossary-def">A URL-format string containing all info to connect to a database: protocol, username, password, host, port, and database name.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">Layer (Docker)</div>
+                    <div class="glossary-def">Each instruction in a Dockerfile creates a layer. Layers are cached - unchanged layers reuse cache, speeding up builds.</div>
+                </div>
+                <div class="glossary-item">
+                    <div class="glossary-term">Detached Mode (-d)</div>
+                    <div class="glossary-def">Running a container in the background. Your terminal is freed immediately. Use 'docker logs' to see output later.</div>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Built with 🐳 Docker knowledge | Hover over <span class="jargon" data-meaning="You found an easter egg! These yellow terms have tooltips.">yellow terms</span> for definitions</p>
+        </footer>
+    </main>
+
+    <script>
+        // Tab functionality
+        function showTab(section, tabName) {
+            const tabContents = document.querySelectorAll(`#${section} ~ .tab-content, #${section} .tab-content`);
+            const tabs = document.querySelectorAll(`#${section} ~ .tabs .tab, #${section} .tabs .tab`);
+
+            // Find tabs within the same section
+            const sectionEl = document.getElementById(section);
+            const sectionTabs = sectionEl.querySelectorAll('.tabs .tab');
+            const sectionContents = sectionEl.querySelectorAll('.tab-content');
+
+            sectionTabs.forEach(tab => tab.classList.remove('active'));
+            sectionContents.forEach(content => content.classList.remove('active'));
+
+            // Activate clicked tab
+            event.target.classList.add('active');
+            document.getElementById(`${section}-${tabName}`).classList.add('active');
+        }
+
+        // Accordion functionality
+        function toggleAccordion(header) {
+            const item = header.parentElement;
+            const wasOpen = item.classList.contains('open');
+
+            // Close all in same accordion
+            const accordion = item.parentElement;
+            accordion.querySelectorAll('.accordion-item').forEach(i => i.classList.remove('open'));
+
+            // Toggle clicked item
+            if (!wasOpen) {
+                item.classList.add('open');
+            }
+        }
+
+        // Smooth scroll for navigation
+        document.querySelectorAll('nav a').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href');
+                document.querySelector(targetId).scrollIntoView({
+                    behavior: 'smooth'
+                });
+
+                // Update active nav
+                document.querySelectorAll('nav a').forEach(a => a.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Update nav on scroll
+        window.addEventListener('scroll', () => {
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('nav a');
+
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (scrollY >= sectionTop - 200) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === `#${current}`) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
