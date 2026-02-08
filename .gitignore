@@ -203,6 +203,12 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# GCP service account keys
+gcs.json
+!package.json
+!package-lock.json
+!tsconfig.json
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
