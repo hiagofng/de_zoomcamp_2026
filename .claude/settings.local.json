@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dbt --version:*)",
+      "Bash(python -m pip:*)"
+    ]
+  }
+}
