@@ -35,7 +35,7 @@ If you run `dbt run --select int_trips_unioned`, what models will be built?
 ### ANSWER
 
 -> `int_trips_unioned` only
- 
+
 It executes only that one model called int_trips_unioned against my targets. It does not run its upstream dependencies unless we add a + prefix
 
 
@@ -105,8 +105,8 @@ What is the count of records in the `fct_monthly_zone_revenue` model?
 
 ### ANSWER
 
-SELECT count(*) 
-FROM nytaxi_prod.fct_monthly_zone_revenue 
+SELECT count(*)
+FROM nytaxi_prod.fct_monthly_zone_revenue
 LIMIT 1000
 
 --> 12,184
@@ -132,7 +132,7 @@ Which zone had the highest revenue?
 
 In this case we have to consider only green taxis for the 2020 year and group by pick_zone_name, ordering desc the monthly_total_sum
 
-SELECT 
+SELECT
       service_type,
       pickup_zone_name,
       sum(monthly_total_amount) as total_sum
@@ -156,7 +156,6 @@ Using the `fct_monthly_zone_revenue` table, what is the **total number of trips*
 ### ANSWER
 
 --> 384,624
-
 
 For this exercise I had to create a new field called total_monthly_trips in the fct_monthly_trips_revenue
 This new field is the count of rows in the fct_trips table
@@ -190,11 +189,11 @@ What is the count of records in `stg_fhv_tripdata`?
 
 ### ANSWER
 
-For this one I had to get data from the source and upload it to my gcp bucket, then I had to create new table stg_fhv_tripdata in production envitornment, created the model as a staging to filter out null values and rename some fields. Then I updated the profile.yaml to have one more profile called fhv_prod. 
+For this one I had to get data from the source and upload it to my gcp bucket, then I had to create new table stg_fhv_tripdata in production envitornment, created the model as a staging to filter out null values and rename some fields. Then I updated the profile.yaml to have one more profile called fhv_prod.
 Finally, it was just a matter to execute the sql below to find the total quantity of records
 
-SELECT 
-  count(*)  
+SELECT
+  count(*)
 FROM `fhv_prod.stg_fhv_tripdata`
 
 -> 43244693
@@ -202,11 +201,9 @@ FROM `fhv_prod.stg_fhv_tripdata`
 
 ---
 
-### Submitting the solutions
+## Submitting the solutions
 
 - Form for submitting: <https://courses.datatalks.club/de-zoomcamp-2026/homework/hw4>
-
-=======
 
 My solution: <LINK>
 
