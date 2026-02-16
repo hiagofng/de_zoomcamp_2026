@@ -12,7 +12,7 @@ In this homework, we'll use the dbt project in `04-analytics-engineering/taxi_ri
 
 After a successful build, you should have models like `fct_trips`, `dim_zones`, and `fct_monthly_zone_revenue` in your warehouse.
 
-### Question 1. dbt Lineage and Execution
+## Question 1. dbt Lineage and Execution
 
 Given a dbt project with the following structure:
 
@@ -32,7 +32,7 @@ If you run `dbt run --select int_trips_unioned`, what models will be built?
 - `int_trips_unioned` only
 - `int_trips_unioned`, `int_trips`, and `fct_trips` (downstream dependencies)
 
-## ANSWER
+### ANSWER
 
 -> `int_trips_unioned` only
  
@@ -41,7 +41,7 @@ It executes only that one model called int_trips_unioned against my targets. It 
 
 ---
 
-### Question 2. dbt Tests
+## Question 2. dbt Tests
 
 You've configured a generic test like this in your `schema.yml`:
 
@@ -64,7 +64,7 @@ What happens when you run `dbt test --select fct_trips`?
 - dbt will pass the test with a warning about the new value
 - dbt will update the configuration to include the new value
 
-## ANSWER
+### ANSWER
 
 --> dbt will fail the test, returning a non-zero exit code
 
@@ -103,7 +103,7 @@ What is the count of records in the `fct_monthly_zone_revenue` model?
 - 12,184
 - 15,421
 
-## ANSWER
+### ANSWER
 
 SELECT count(*) 
 FROM nytaxi_prod.fct_monthly_zone_revenue 
@@ -115,7 +115,7 @@ After adding the service_type in the fct_trips and then adding it to the group b
 
 ---
 
-### Question 4. Best Performing Zone for Green Taxis (2020)
+## Question 4. Best Performing Zone for Green Taxis (2020)
 
 Using the `fct_monthly_zone_revenue` table, find the pickup zone with the **highest total revenue** (`revenue_monthly_total_amount`) for **Green** taxi trips in 2020.
 
@@ -126,7 +126,7 @@ Which zone had the highest revenue?
 - East Harlem South
 - Washington Heights South
 
-## ANSWER
+### ANSWER
 
 --> East Harlem North
 
@@ -144,7 +144,7 @@ order by 3 desc
 
 ---
 
-### Question 5. Green Taxi Trip Counts (October 2019)
+## Question 5. Green Taxi Trip Counts (October 2019)
 
 Using the `fct_monthly_zone_revenue` table, what is the **total number of trips** (`total_monthly_trips`) for Green taxis in October 2019?
 
@@ -153,7 +153,7 @@ Using the `fct_monthly_zone_revenue` table, what is the **total number of trips*
 - 384,624
 - 421,509
 
-## ANSWER
+### ANSWER
 
 --> 384,624
 
@@ -172,7 +172,7 @@ WHERE EXTRACT(YEAR FROM revenue_month) = 2019
 
 ---
 
-### Question 6. Build a Staging Model for FHV Data
+## Question 6. Build a Staging Model for FHV Data
 
 Create a staging model for the **For-Hire Vehicle (FHV)** trip data for 2019.
 
@@ -188,7 +188,7 @@ What is the count of records in `stg_fhv_tripdata`?
 - 22,998,722
 - 44,112,187
 
-## ANSWER
+### ANSWER
 
 For this one I had to get data from the source and upload it to my gcp bucket, then I had to create new table stg_fhv_tripdata in production envitornment, created the model as a staging to filter out null values and rename some fields. Then I updated the profile.yaml to have one more profile called fhv_prod. 
 Finally, it was just a matter to execute the sql below to find the total quantity of records
@@ -202,7 +202,7 @@ FROM `fhv_prod.stg_fhv_tripdata`
 
 ---
 
-## Submitting the solutions
+### Submitting the solutions
 
 - Form for submitting: <https://courses.datatalks.club/de-zoomcamp-2026/homework/hw4>
 

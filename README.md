@@ -134,5 +134,62 @@
 
 ---
 
+### ✅ Module 4: Analytics Engineering with dbt
+
+**Status:** Completed
+**Folder:** [`04-analytics-engineering/`](./04-analytics-engineering/)
+
+#### What I Learned
+
+- **dbt fundamentals** - Architecture, project structure, and the role of dbt in the T of ELT
+- **Installation and setup** - dbt-core with BigQuery adapter, VS Code integration, and profile configuration (dev/prod targets)
+- **Layered data modeling** - Staging, intermediate, and marts layers following dbt best practices
+- **Sources and refs** - Declaring external BigQuery tables as sources and using `{{ ref() }}` for model dependencies
+- **Seeds** - Loading CSV lookup tables (taxi zones) as reference data in the warehouse
+- **Macros** - Creating reusable SQL functions (e.g., vendor name mapping) to improve maintainability
+- **Data testing** - Generic tests (`accepted_values`, `not_null`), understanding test severity and failure behavior
+- **Documentation as code** - YAML-based column and table descriptions, generating lineage graphs with `dbt docs`
+- **Multiple environments** - Managing dev, prod, and FHV-specific targets via `profiles.yml`
+- **FHV data pipeline** - End-to-end: Python script to download/upload CSVs to GCS, external tables in BigQuery, staging model with filtering
+
+#### Key Deliverables
+
+- ✅ **Homework 04** - Analytics engineering and dbt exercises
+- Full dbt project with 11 models across 3 layers (staging, intermediate, marts)
+- Staging models for Yellow, Green, and FHV taxi data with standardized column names
+- Intermediate union model combining Green and Yellow trip data
+- Fact tables: `fct_trips` (with zone joins) and `fct_monthly_zone_revenue` (aggregated by zone, month, and service type)
+- Dimension tables: `dim_zones` and `dim_vendors`
+- Python ingestion scripts for loading FHV 2019 data into GCS and BigQuery
+- Data quality tests on payment types using `accepted_values`
+
+#### Technologies Used
+
+`dbt` `BigQuery` `Google Cloud Storage` `SQL` `Python` `YAML`
+
+#### dbt Model Architecture
+
+| Layer | Model | Description |
+|-------|-------|-------------|
+| Staging | `stg_green_tripdata` | Cleaned green taxi trips with standardized columns |
+| Staging | `stg_yellow_tripdata` | Cleaned yellow taxi trips with standardized columns |
+| Staging | `stg_fhv_tripdata` | Cleaned FHV trips (2019), filtered null dispatching base |
+| Intermediate | `int_trips_unioned` | Union of green and yellow staging models |
+| Marts | `dim_zones` | Taxi zone lookup dimension |
+| Marts | `dim_vendors` | Vendor name dimension via macro |
+| Marts | `fct_trips` | Fact table joining trips with pickup/dropoff zones |
+| Marts | `fct_monthly_zone_revenue` | Monthly revenue and trip counts by zone and service type |
+
+#### Homework Results
+
+| Question | Query Target | Answer |
+|----------|-------------|--------|
+| Q3 - Record count `fct_monthly_zone_revenue` | `SELECT count(*)` | **12,184** |
+| Q4 - Top revenue zone (Green, 2020) | `GROUP BY pickup_zone, ORDER BY revenue DESC` | **East Harlem North** |
+| Q5 - Green trips (Oct 2019) | `SUM(total_monthly_trips)` | **384,624** |
+| Q6 - FHV staging record count | `SELECT count(*)` | **43,244,693** |
+
+---
+
 ## 🚀 Getting Started
 ```bash
