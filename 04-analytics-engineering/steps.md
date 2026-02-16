@@ -1,2 +1,0 @@
--> Understand what is data wharehouse, data lakehouse and data lake and their differences
--> What is DBT and how its role inside a data pipeline

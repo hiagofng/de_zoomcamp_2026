@@ -1,0 +1,22 @@
+version: 2
+
+sources:
+  - name: raw_data
+    description: "Raw data sources for NYC taxi rides"
+    database: project-c92681f2-4463-49ea-9cf
+    schema: nytaxi
+    tables: 
+      - name: yellow_tripdata
+        description: "Raw data for yellow taxi trips in NYC"
+      - name: green_tripdata
+        description: "Raw data for green taxi trips in NYC"
+      - name: taxi_zone_lookup
+        description: "Lookup table for taxi zones in NYC"
+  
+  - name: fhv_raw_data
+    description: "Raw FHV trip data"
+    database: project-c92681f2-4463-49ea-9cf
+    schema: ny_taxi_fhv
+    tables:
+      - name: tripdata_2019
+        description: "Raw FHV trip data for 2019"

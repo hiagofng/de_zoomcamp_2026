@@ -1,0 +1,7 @@
+- entendi a arquitetura básica da ferramenta dbt e sua importancia na transformação e modelagem dos dados
+- Realizei a Instalação, configuração e integração da ferramenta com a IDE do vs code e integração com bigquery
+- criei modelos, com diferentes propositos nas 3 camadas de modelagem recomendadas pela dbt: staging, intermediate and marts
+- Aprendi e implementei seeds que criam mapeamentos entre códigos e nomes, por exemplo.
+- Desenvolvi macros que visaram, neste caso,  isolar condicionais para serem reutilizadas como funções nos modelos que visam melhorar a manutenibilidade
+- Aprendi sobre os diversos tipos de testes como singluares, que validam regra de negócio específicas, testes genéricos que se fora do padrão interrompem o fluxo evitand efeito dominós e teste unitários que permitem testar de forma isolada a lógica do sql, usando dados ficticios
+- Realizei documentação as-code de colunas, tabelas e regras de negócio utilizando arquivos YAML. Além disso, utilizei o dbt docs para gerar e servir uma interface visual intuitiva, facilitando a governança e linhagem de dados.
