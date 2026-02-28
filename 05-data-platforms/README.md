@@ -42,9 +42,9 @@ Which incremental strategy is best for processing a specific interval period by 
 
 ### ANSWER
 
---> time_interval strategy
+--> `time_interval`
 
-Because time_interval takes the run's start/end dates, deletes all existing row in that time window (base on the incremental_key column) then inserts the freshly computed rows for that same period, avoiding duplicating data in subsequent runs.
+Because time_interval strategy takes the run's start/end dates, deletes all existing row in that time window (base on the incremental_key column) then inserts the freshly computed rows for that same period, avoiding duplicating data in subsequent runs.
 
 ---
 
