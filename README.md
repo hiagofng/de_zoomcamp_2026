@@ -191,5 +191,45 @@
 
 ---
 
+### ✅ Module 5: Data Platforms
+
+**Status:** Completed
+**Folder:** [`05-data-platforms/`](./05-data-platforms/)
+
+#### What I Learned
+
+- **Bruin fundamentals** - Project structure, configuration, and CLI commands
+- **DuckDB integration** - Local analytical database for fast SQL queries
+- **Pipeline orchestration** - Declarative pipelines with `pipeline.yml` and asset dependencies
+- **Materialization strategies** - Table, view, and incremental `time_interval` strategy
+- **Data ingestion** - Python and CSV-based asset ingestion into DuckDB
+- **Data quality checks** - Column-level validations (`not_null`, `non_negative`, `accepted_values`)
+- **Layered architecture** - Ingestion, staging, and reports layers with dependency management
+- **Pipeline variables** - Array variables and CLI overrides for flexible execution
+
+#### Key Deliverables
+
+- ✅ **Homework 05** - Data platforms and Bruin exercises
+- Working Bruin pipeline with DuckDB backend
+- Ingestion assets for Yellow and Green taxi data (Python + CSV seed)
+- Staging model with payment type enrichment
+- Reports model with incremental time-based materialization
+- Data quality checks on all output columns
+
+#### Technologies Used
+
+`Bruin` `DuckDB` `SQL` `Python` `YAML`
+
+#### Bruin Pipeline Architecture
+
+| Layer | Asset | Description |
+|-------|-------|-------------|
+| Ingestion | `trips.py` | Python script ingesting Yellow and Green taxi parquet data |
+| Ingestion | `payment_lookup.csv` | CSV seed for payment type names |
+| Staging | `staging.trips` | Joins trip data with payment lookup, adds taxi type |
+| Reports | `reports.trips_report` | Aggregated daily metrics by taxi type and payment type |
+
+---
+
 ## 🚀 Getting Started
 ```bash
