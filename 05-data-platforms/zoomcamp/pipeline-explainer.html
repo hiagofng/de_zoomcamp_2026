@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NYC Taxi Data Pipeline — Explained</title>
+<style>
+/* ===== CSS RESET & BASE ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg: #0f1117;
+  --bg2: #1a1d27;
+  --bg3: #242836;
+  --text: #e4e6ef;
+  --text2: #9ca0b0;
+  --accent: #6c63ff;
+  --accent2: #ff6b6b;
+  --accent3: #4ecdc4;
+  --accent4: #ffe66d;
+  --green: #4ecdc4;
+  --yellow: #ffe66d;
+  --orange: #ff9f43;
+  --pink: #ff6b9d;
+  --blue: #5b8dee;
+  --border: #2d3148;
+  --code-bg: #1e2233;
+  --shadow: 0 4px 24px rgba(0,0,0,0.3);
+  --radius: 12px;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  --transition: 0.3s ease;
+}
+
+.light {
+  --bg: #f5f6fa;
+  --bg2: #ffffff;
+  --bg3: #eef0f6;
+  --text: #1a1d27;
+  --text2: #5a5e70;
+  --border: #d8dbe6;
+  --code-bg: #eef0f6;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  transition: background var(--transition), color var(--transition);
+  overflow-x: hidden;
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+/* ===== NAV ===== */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  transition: background var(--transition);
+}
+nav .nav-inner {
+  max-width: 1200px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 1.5rem;
+}
+nav .logo { font-weight: 700; font-size: 1.1rem; color: var(--accent); }
+nav .nav-links { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+nav .nav-links a {
+  color: var(--text2); text-decoration: none; font-size: 0.82rem;
+  padding: 0.35rem 0.65rem; border-radius: 6px; transition: all var(--transition);
+}
+nav .nav-links a:hover, nav .nav-links a.active {
+  color: var(--accent); background: var(--bg3);
+}
+.theme-toggle {
+  background: var(--bg3); border: 1px solid var(--border); color: var(--text);
+  padding: 0.4rem 0.7rem; border-radius: 8px; cursor: pointer; font-size: 1rem;
+  transition: all var(--transition);
+}
+.theme-toggle:hover { border-color: var(--accent); }
+
+/* ===== LAYOUT ===== */
+main { max-width: 1000px; margin: 0 auto; padding: 5rem 1.5rem 4rem; }
+section { margin-bottom: 4rem; scroll-margin-top: 4.5rem; }
+
+h1 { font-size: 2.8rem; font-weight: 800; line-height: 1.2; }
+h2 { font-size: 1.9rem; font-weight: 700; margin-bottom: 1rem; color: var(--text); }
+h3 { font-size: 1.3rem; font-weight: 600; margin-bottom: 0.6rem; }
+p { margin-bottom: 1rem; color: var(--text2); }
+
+/* ===== HERO ===== */
+.hero {
+  text-align: center; padding: 4rem 0 3rem;
+  background: linear-gradient(135deg, rgba(108,99,255,0.08), rgba(78,205,196,0.08));
+  border-radius: var(--radius); margin-bottom: 3rem;
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: ''; position: absolute; top: -50%; left: -50%;
+  width: 200%; height: 200%;
+  background: radial-gradient(circle at 30% 40%, rgba(108,99,255,0.06) 0%, transparent 50%),
+              radial-gradient(circle at 70% 60%, rgba(78,205,196,0.06) 0%, transparent 50%);
+  animation: heroFloat 15s ease-in-out infinite;
+}
+@keyframes heroFloat {
+  0%,100% { transform: translate(0,0) rotate(0deg); }
+  50% { transform: translate(-2%,2%) rotate(2deg); }
+}
+.hero h1 { position: relative; margin-bottom: 1rem; }
+.hero h1 span { color: var(--accent); }
+.hero .subtitle {
+  font-size: 1.15rem; color: var(--text2); max-width: 600px;
+  margin: 0 auto 2rem; position: relative;
+}
+
+/* ===== ANALOGY BOX ===== */
+.analogy {
+  background: linear-gradient(135deg, var(--bg3), var(--bg2));
+  border: 1px solid var(--border); border-left: 4px solid var(--accent4);
+  border-radius: var(--radius); padding: 1.2rem 1.5rem; margin: 1.2rem 0;
+}
+.analogy .analogy-label {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--accent4); margin-bottom: 0.4rem;
+}
+.analogy p { margin: 0; color: var(--text); font-size: 0.95rem; }
+
+/* ===== CARDS ===== */
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1.8rem; margin-bottom: 1.5rem;
+  transition: all var(--transition); box-shadow: var(--shadow);
+}
+.card:hover { border-color: var(--accent); transform: translateY(-2px); }
+
+/* ===== CODE BLOCKS ===== */
+.code-block {
+  position: relative; background: var(--code-bg);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  margin: 1rem 0; overflow: hidden;
+}
+.code-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.6rem 1rem; background: var(--bg3); border-bottom: 1px solid var(--border);
+  font-size: 0.8rem; color: var(--text2);
+}
+.code-header .lang-badge {
+  background: var(--accent); color: #fff; padding: 0.15rem 0.5rem;
+  border-radius: 4px; font-size: 0.7rem; font-weight: 600;
+}
+.code-block pre {
+  padding: 1rem 1.2rem; overflow-x: auto; font-family: var(--mono);
+  font-size: 0.82rem; line-height: 1.65; color: var(--text);
+}
+.code-block .expandable-code { max-height: 280px; overflow: hidden; transition: max-height 0.4s ease; }
+.code-block .expandable-code.expanded { max-height: 3000px; }
+.code-expand-btn {
+  display: block; width: 100%; padding: 0.5rem;
+  background: linear-gradient(to bottom, transparent, var(--code-bg) 40%);
+  border: none; color: var(--accent); cursor: pointer;
+  font-family: var(--font); font-size: 0.85rem; font-weight: 600;
+  position: relative; margin-top: -2rem;
+}
+.code-expand-btn:hover { text-decoration: underline; }
+
+/* ===== INLINE CODE ===== */
+code {
+  background: var(--code-bg); padding: 0.15em 0.4em;
+  border-radius: 4px; font-family: var(--mono); font-size: 0.88em;
+  border: 1px solid var(--border);
+}
+pre code { background: none; border: none; padding: 0; }
+
+/* ===== ANNOTATIONS ===== */
+.annotation {
+  display: inline-block; background: var(--accent);
+  color: #fff; font-size: 0.7rem; font-weight: 700;
+  padding: 0.1rem 0.45rem; border-radius: 4px; margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+/* ===== PIPELINE DIAGRAM ===== */
+.pipeline-diagram {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; padding: 2rem 0; flex-wrap: wrap;
+}
+.pipeline-node {
+  display: flex; flex-direction: column; align-items: center;
+  cursor: pointer; transition: transform var(--transition);
+  padding: 0.5rem;
+}
+.pipeline-node:hover { transform: scale(1.08); }
+.pipeline-node .node-icon {
+  width: 70px; height: 70px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; margin-bottom: 0.5rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  transition: all var(--transition);
+}
+.pipeline-node .node-label {
+  font-size: 0.8rem; font-weight: 600; text-align: center; color: var(--text);
+}
+.pipeline-node .node-sublabel {
+  font-size: 0.68rem; color: var(--text2); text-align: center;
+}
+.pipeline-arrow {
+  font-size: 1.5rem; color: var(--accent); margin: 0 0.3rem;
+  animation: arrowPulse 2s ease-in-out infinite;
+}
+@keyframes arrowPulse {
+  0%,100% { opacity: 0.4; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(4px); }
+}
+
+.node-source .node-icon { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
+.node-ingest .node-icon { background: linear-gradient(135deg, #ff9f43, #f39c12); }
+.node-stage .node-icon { background: linear-gradient(135deg, #4ecdc4, #26d0ce); }
+.node-report .node-icon { background: linear-gradient(135deg, #6c63ff, #5b8dee); }
+.node-db .node-icon { background: linear-gradient(135deg, #a55eea, #8854d0); }
+
+/* ===== LAYER TABS ===== */
+.layer-tabs {
+  display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;
+}
+.layer-tab {
+  padding: 0.6rem 1.2rem; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg2);
+  color: var(--text2); cursor: pointer; font-weight: 600;
+  font-size: 0.88rem; transition: all var(--transition);
+  font-family: var(--font);
+}
+.layer-tab:hover { border-color: var(--accent); color: var(--text); }
+.layer-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.layer-content { display: none; }
+.layer-content.active { display: block; }
+
+/* ===== DATA FLOW ANIMATION ===== */
+.flow-container {
+  position: relative; background: var(--bg2);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 2rem; margin: 1.5rem 0; overflow: hidden;
+}
+.flow-stages {
+  display: flex; align-items: stretch; gap: 0.5rem;
+  justify-content: space-between; position: relative;
+}
+.flow-stage {
+  flex: 1; text-align: center; padding: 1rem 0.5rem;
+  border-radius: 10px; border: 2px solid var(--border);
+  background: var(--bg3); transition: all 0.5s ease;
+  position: relative; min-height: 120px;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.flow-stage.active {
+  border-color: var(--accent); box-shadow: 0 0 20px rgba(108,99,255,0.2);
+}
+.flow-stage .stage-title {
+  font-weight: 700; font-size: 0.85rem; margin-bottom: 0.3rem; color: var(--text);
+}
+.flow-stage .stage-desc {
+  font-size: 0.72rem; color: var(--text2); line-height: 1.4;
+}
+.flow-arrow-container {
+  display: flex; align-items: center; color: var(--accent); font-size: 1.2rem; padding: 0 0.2rem;
+}
+.flow-controls {
+  display: flex; justify-content: center; gap: 0.8rem; margin-top: 1.5rem;
+}
+.flow-btn {
+  padding: 0.5rem 1.2rem; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg3);
+  color: var(--text); cursor: pointer; font-weight: 600;
+  font-size: 0.85rem; transition: all var(--transition);
+  font-family: var(--font);
+}
+.flow-btn:hover { border-color: var(--accent); background: var(--accent); color: #fff; }
+.flow-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.flow-status {
+  text-align: center; margin-top: 1rem;
+  padding: 0.8rem; background: var(--bg3); border-radius: 8px;
+  font-size: 0.85rem; color: var(--text2); min-height: 3rem;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ===== BEFORE / AFTER ===== */
+.data-compare {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;
+}
+.data-compare .compare-panel {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1rem; overflow-x: auto;
+}
+.data-compare .compare-label {
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em; margin-bottom: 0.5rem;
+}
+.data-compare .before .compare-label { color: var(--accent2); }
+.data-compare .after .compare-label { color: var(--green); }
+.mini-table { width: 100%; font-size: 0.72rem; border-collapse: collapse; }
+.mini-table th, .mini-table td {
+  padding: 0.35rem 0.5rem; text-align: left;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.mini-table th { color: var(--text2); font-weight: 600; font-size: 0.68rem; text-transform: uppercase; }
+.mini-table td { color: var(--text); font-family: var(--mono); font-size: 0.7rem; }
+
+/* ===== GLOSSARY ===== */
+.glossary-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.glossary-item {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 1rem 1.2rem;
+  transition: all var(--transition);
+}
+.glossary-item:hover { border-color: var(--accent); }
+.glossary-term {
+  font-weight: 700; color: var(--accent); font-size: 0.95rem; margin-bottom: 0.3rem;
+}
+.glossary-def { font-size: 0.85rem; color: var(--text2); }
+
+/* ===== FLOATING GLOSSARY ===== */
+.glossary-fab {
+  position: fixed; bottom: 2rem; right: 2rem; z-index: 999;
+  width: 50px; height: 50px; border-radius: 50%;
+  background: var(--accent); color: #fff; border: none;
+  font-size: 1.3rem; cursor: pointer;
+  box-shadow: 0 4px 16px rgba(108,99,255,0.4);
+  transition: all var(--transition);
+  display: flex; align-items: center; justify-content: center;
+}
+.glossary-fab:hover { transform: scale(1.1); }
+.glossary-panel {
+  position: fixed; bottom: 5rem; right: 2rem; z-index: 998;
+  width: 340px; max-height: 70vh; overflow-y: auto;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 1.2rem; display: none;
+}
+.glossary-panel.open { display: block; }
+.glossary-panel h3 { margin-bottom: 0.8rem; }
+.glossary-panel .glossary-entry {
+  padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+}
+.glossary-panel .glossary-entry:last-child { border-bottom: none; }
+.glossary-panel .g-term { font-weight: 700; color: var(--accent); font-size: 0.88rem; }
+.glossary-panel .g-def { font-size: 0.8rem; color: var(--text2); margin-top: 0.2rem; }
+
+/* ===== DIAGRAM BOXES ===== */
+.diagram-flow {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0.5rem; margin: 1.5rem 0; flex-wrap: wrap;
+}
+.diagram-box {
+  padding: 0.7rem 1.2rem; border-radius: 10px; font-weight: 600;
+  font-size: 0.85rem; text-align: center; min-width: 100px;
+}
+.diagram-box.src { background: rgba(255,107,107,0.15); color: var(--accent2); border: 1px solid rgba(255,107,107,0.3); }
+.diagram-box.proc { background: rgba(108,99,255,0.15); color: var(--accent); border: 1px solid rgba(108,99,255,0.3); }
+.diagram-box.dest { background: rgba(78,205,196,0.15); color: var(--green); border: 1px solid rgba(78,205,196,0.3); }
+.diagram-box.data { background: rgba(255,230,109,0.15); color: var(--yellow); border: 1px solid rgba(255,230,109,0.3); }
+.diagram-arrow { color: var(--text2); font-size: 1.3rem; }
+
+/* ===== QUALITY CHECKS BOX ===== */
+.checks-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.8rem; margin: 1rem 0;
+}
+.check-item {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.8rem; font-size: 0.82rem;
+}
+.check-item .check-name { font-weight: 700; color: var(--green); margin-bottom: 0.2rem; }
+.check-item .check-desc { color: var(--text2); font-size: 0.78rem; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+  h1 { font-size: 2rem; }
+  h2 { font-size: 1.5rem; }
+  main { padding: 4.5rem 1rem 3rem; }
+  .pipeline-diagram { flex-direction: column; }
+  .pipeline-arrow { transform: rotate(90deg); }
+  .data-compare { grid-template-columns: 1fr; }
+  nav .nav-links { display: none; }
+  .flow-stages { flex-direction: column; }
+  .flow-arrow-container { transform: rotate(90deg); }
+  .glossary-panel { width: calc(100vw - 2rem); right: 1rem; }
+}
+
+/* ===== HIGHLIGHT CLASSES FOR CODE ===== */
+.hl-kw { color: #c678dd; }
+.hl-str { color: #98c379; }
+.hl-fn { color: #61afef; }
+.hl-cm { color: #5c6370; font-style: italic; }
+.hl-num { color: #d19a66; }
+.hl-op { color: #56b6c2; }
+.hl-type { color: #e5c07b; }
+.hl-var { color: #e06c75; }
+
+/* ===== SECTION BADGES ===== */
+.section-badge {
+  display: inline-block; font-size: 0.7rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  padding: 0.25rem 0.7rem; border-radius: 20px; margin-bottom: 0.8rem;
+}
+.badge-config { background: rgba(255,159,67,0.15); color: var(--orange); }
+.badge-ingest { background: rgba(255,107,107,0.15); color: var(--accent2); }
+.badge-stage { background: rgba(78,205,196,0.15); color: var(--green); }
+.badge-report { background: rgba(108,99,255,0.15); color: var(--accent); }
+.badge-glossary { background: rgba(255,230,109,0.15); color: var(--yellow); }
+
+/* ===== PROGRESS DOTS ===== */
+.progress-bar {
+  display: flex; justify-content: center; gap: 0.5rem; margin: 1rem 0;
+}
+.progress-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--border); transition: all 0.3s ease;
+}
+.progress-dot.active { background: var(--accent); transform: scale(1.3); }
+.progress-dot.done { background: var(--green); }
+
+/* ===== REVEAL ANIMATION ===== */
+.reveal {
+  opacity: 0; transform: translateY(30px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-inner">
+    <div class="logo">Bruin Pipeline</div>
+    <div class="nav-links">
+      <a href="#hero">Home</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#config">Config</a>
+      <a href="#ingestion">Ingestion</a>
+      <a href="#staging">Staging</a>
+      <a href="#reports">Reports</a>
+      <a href="#walkthrough">Walkthrough</a>
+      <a href="#glossary">Glossary</a>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">🌓</button>
+  </div>
+</nav>
+
+<main>
+
+<!-- ===== HERO ===== -->
+<section id="hero" class="hero reveal">
+  <h1>Your NYC Taxi Data Pipeline<br><span>— Explained</span></h1>
+  <p class="subtitle">
+    An interactive, no-jargon-left-behind guide to how your Bruin pipeline transforms
+    raw NYC taxi trip data into clean, aggregated reports. Every detail. Every step.
+  </p>
+
+  <div class="analogy" style="max-width:650px;margin:0 auto;">
+    <div class="analogy-label">🏭 Real-World Analogy</div>
+    <p>
+      Think of this pipeline as a <strong>factory assembly line</strong>. Raw materials (taxi trip files)
+      arrive at the loading dock. They go through quality control and sorting. Then they're packaged
+      into summary reports and placed on the store shelf (your database) — ready for anyone to use.
+    </p>
+  </div>
+</section>
+
+<!-- ===== ARCHITECTURE ===== -->
+<section id="architecture" class="reveal">
+  <h2>Architecture Overview</h2>
+  <p>Click any node to jump to its detailed section.</p>
+
+  <div class="pipeline-diagram">
+    <div class="pipeline-node node-source" onclick="document.getElementById('ingestion').scrollIntoView({behavior:'smooth'})">
+      <div class="node-icon">🌐</div>
+      <div class="node-label">Data Source</div>
+      <div class="node-sublabel">NYC TLC Parquet Files</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-node node-ingest" onclick="document.getElementById('ingestion').scrollIntoView({behavior:'smooth'})">
+      <div class="node-icon">📥</div>
+      <div class="node-label">Ingestion</div>
+      <div class="node-sublabel">trips.py + seed</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-node node-stage" onclick="document.getElementById('staging').scrollIntoView({behavior:'smooth'})">
+      <div class="node-icon">🔧</div>
+      <div class="node-label">Staging</div>
+      <div class="node-sublabel">trips.sql</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-node node-report" onclick="document.getElementById('reports').scrollIntoView({behavior:'smooth'})">
+      <div class="node-icon">📊</div>
+      <div class="node-label">Reports</div>
+      <div class="node-sublabel">trips_report.sql</div>
+    </div>
+    <div class="pipeline-arrow">→</div>
+    <div class="pipeline-node node-db" onclick="document.getElementById('config').scrollIntoView({behavior:'smooth'})">
+      <div class="node-icon">🗄️</div>
+      <div class="node-label">DuckDB</div>
+      <div class="node-sublabel">Local Database</div>
+    </div>
+  </div>
+
+  <div class="analogy">
+    <div class="analogy-label">🏭 Assembly Line Map</div>
+    <p>
+      <strong>Data Source</strong> = the warehouse where raw materials sit &nbsp;→&nbsp;
+      <strong>Ingestion</strong> = the trucks that fetch and unload &nbsp;→&nbsp;
+      <strong>Staging</strong> = quality control & sorting &nbsp;→&nbsp;
+      <strong>Reports</strong> = the finished product summary &nbsp;→&nbsp;
+      <strong>DuckDB</strong> = the store shelf where everything is stored.
+    </p>
+  </div>
+</section>
+
+<!-- ===== CONFIGURATION ===== -->
+<section id="config" class="reveal">
+  <span class="section-badge badge-config">Configuration Layer</span>
+  <h2>Configuration — The Factory's Blueprint</h2>
+
+  <div class="card">
+    <h3><code>.bruin.yml</code> — The Address Book</h3>
+    <div class="analogy">
+      <div class="analogy-label">🏭 Analogy</div>
+      <p>This file is the factory's <strong>address book</strong> — it tells Bruin where all the external services and databases live, so every asset knows how to connect.</p>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span>📄 .bruin.yml</span>
+        <span class="lang-badge">YAML</span>
+      </div>
+      <pre><code><span class="hl-kw">default_environment</span>: default        <span class="hl-cm"># Which environment to use by default</span>
+<span class="hl-kw">environments</span>:
+    <span class="hl-kw">default</span>:
+        <span class="hl-kw">connections</span>:
+            <span class="hl-kw">duckdb</span>:                       <span class="hl-cm"># Connection type</span>
+                - <span class="hl-kw">name</span>: duckdb-default        <span class="hl-cm"># A reusable name for this connection</span>
+                  <span class="hl-kw">path</span>: ./zoomcamp/pipeline/duckdb.db  <span class="hl-cm"># Where the database file lives</span></code></pre>
+    </div>
+    <p>
+      <strong>What this does:</strong> Defines one environment called <code>default</code> with a single DuckDB connection.
+      The database file lives at <code>./zoomcamp/pipeline/duckdb.db</code>. Every asset that references
+      <code>duckdb-default</code> will read/write to this file.
+    </p>
+  </div>
+
+  <div class="card">
+    <h3><code>pipeline.yml</code> — The Production Schedule</h3>
+    <div class="analogy">
+      <div class="analogy-label">🏭 Analogy</div>
+      <p>This is the <strong>production schedule</strong> pinned to the factory wall — it says when the assembly line runs, what date range to process, and what kind of products (taxi types) to handle.</p>
+    </div>
+    <div class="code-block">
+      <div class="code-header">
+        <span>📄 pipeline.yml</span>
+        <span class="lang-badge">YAML</span>
+      </div>
+      <pre><code><span class="hl-kw">name</span>: zoomcamp                  <span class="hl-cm"># Pipeline identifier</span>
+<span class="hl-kw">schedule</span>: monthly                <span class="hl-cm"># Runs once per month</span>
+<span class="hl-kw">start_date</span>: <span class="hl-str">"2022-01-01"</span>         <span class="hl-cm"># The beginning of time for this pipeline</span>
+
+<span class="hl-kw">default_connections</span>:
+  <span class="hl-kw">duckdb</span>: duckdb-default          <span class="hl-cm"># All DuckDB assets use this connection</span>
+
+<span class="hl-kw">variables</span>:
+  <span class="hl-kw">taxi_types</span>:
+    <span class="hl-kw">type</span>: array
+    <span class="hl-kw">items</span>:
+      <span class="hl-kw">type</span>: string
+    <span class="hl-kw">default</span>: [<span class="hl-str">"yellow"</span>, <span class="hl-str">"green"</span>]   <span class="hl-cm"># Process both yellow and green taxis</span></code></pre>
+    </div>
+
+    <h3 style="margin-top:1.2rem;">Key concepts explained:</h3>
+    <div class="checks-grid">
+      <div class="check-item">
+        <div class="check-name">schedule: monthly</div>
+        <div class="check-desc">Bruin runs this pipeline once per month. Each run processes one month of data.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">start_date</div>
+        <div class="check-desc">The earliest date this pipeline cares about. Bruin will never try to process data before Jan 1, 2022.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">default_connections</div>
+        <div class="check-desc">Instead of repeating the connection in every asset, set it once here. All DuckDB assets auto-connect to <code>duckdb-default</code>.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">variables</div>
+        <div class="check-desc">Custom parameters passed to assets. Here, <code>taxi_types</code> tells the Python ingestion script to fetch both yellow and green taxi data.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== INGESTION ===== -->
+<section id="ingestion" class="reveal">
+  <span class="section-badge badge-ingest">Layer 1</span>
+  <h2>Ingestion — Fetching the Raw Materials</h2>
+  <p>This layer has two assets that bring data into the pipeline:</p>
+
+  <div class="layer-tabs">
+    <button class="layer-tab active" onclick="switchTab(event, 'tab-seed')">🌱 payment_lookup (Seed)</button>
+    <button class="layer-tab" onclick="switchTab(event, 'tab-trips-py')">🐍 trips.py (Python)</button>
+  </div>
+
+  <!-- SEED TAB -->
+  <div id="tab-seed" class="layer-content active">
+    <div class="card">
+      <h3>payment_lookup — The Reference Manual</h3>
+      <div class="analogy">
+        <div class="analogy-label">🏭 Analogy</div>
+        <p>This is the <strong>reference manual on the factory floor</strong> — a small, rarely-changing lookup table that workers (SQL queries) consult to translate codes into human-readable names.</p>
+      </div>
+
+      <div class="diagram-flow">
+        <div class="diagram-box src">payment_lookup.csv</div>
+        <div class="diagram-arrow">→</div>
+        <div class="diagram-box proc">Bruin Seed Loader</div>
+        <div class="diagram-arrow">→</div>
+        <div class="diagram-box dest">ingestion.payment_lookup</div>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span>📄 payment_lookup.csv</span>
+          <span class="lang-badge">CSV</span>
+        </div>
+        <pre><code>payment_type_id,payment_type_name
+0,flex_fare
+1,credit_card
+2,cash
+3,no_charge
+4,dispute
+5,unknown
+6,voided_trip</code></pre>
+      </div>
+
+      <div class="code-block">
+        <div class="code-header">
+          <span>📄 payment_lookup.asset.yml</span>
+          <span class="lang-badge">YAML</span>
+        </div>
+        <pre><code><span class="hl-kw">name</span>: ingestion.payment_lookup   <span class="hl-cm"># Schema.table naming convention</span>
+<span class="hl-kw">type</span>: duckdb.seed                  <span class="hl-cm"># "seed" = load a CSV directly into the DB</span>
+
+<span class="hl-kw">parameters</span>:
+  <span class="hl-kw">path</span>: payment_lookup.csv          <span class="hl-cm"># Which CSV file to load</span>
+
+<span class="hl-kw">columns</span>:
+  - <span class="hl-kw">name</span>: payment_type_id
+    <span class="hl-kw">type</span>: integer
+    <span class="hl-kw">primary_key</span>: <span class="hl-num">true</span>               <span class="hl-cm"># Each ID is unique</span>
+    <span class="hl-kw">checks</span>:
+      - <span class="hl-kw">name</span>: not_null                <span class="hl-cm"># Cannot be empty</span>
+      - <span class="hl-kw">name</span>: unique                  <span class="hl-cm"># No duplicates allowed</span>
+  - <span class="hl-kw">name</span>: payment_type_name
+    <span class="hl-kw">type</span>: string
+    <span class="hl-kw">checks</span>:
+      - <span class="hl-kw">name</span>: not_null</code></pre>
+      </div>
+
+      <h3 style="margin-top:1rem;">What's a "Seed"?</h3>
+      <p>
+        A <strong>seed</strong> is Bruin's way of loading a small, static CSV file directly into a database table.
+        Unlike dynamic assets that compute data, seeds just copy rows as-is. They're perfect for lookup tables,
+        reference data, or any small dataset that rarely changes.
+      </p>
+
+      <h3>Quality Checks</h3>
+      <p>Even for this tiny table, Bruin verifies:</p>
+      <div class="checks-grid">
+        <div class="check-item">
+          <div class="check-name">not_null</div>
+          <div class="check-desc">Every row must have a value — no blanks allowed.</div>
+        </div>
+        <div class="check-item">
+          <div class="check-name">unique</div>
+          <div class="check-desc">No two rows can share the same <code>payment_type_id</code>.</div>
+        </div>
+        <div class="check-item">
+          <div class="check-name">primary_key</div>
+          <div class="check-desc">Marks <code>payment_type_id</code> as the row identifier — combining not_null + unique.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TRIPS.PY TAB -->
+  <div id="tab-trips-py" class="layer-content">
+    <div class="card">
+      <h3>trips.py — The Truck Fleet</h3>
+      <div class="analogy">
+        <div class="analogy-label">🏭 Analogy</div>
+        <p>This is the <strong>truck that drives to the external warehouse</strong> (NYC TLC website), loads up pallets of raw data (Parquet files), and brings them back to the factory's loading dock (DuckDB).</p>
+      </div>
+
+      <div class="diagram-flow">
+        <div class="diagram-box src">NYC TLC API</div>
+        <div class="diagram-arrow">→</div>
+        <div class="diagram-box proc">trips.py (Python)</div>
+        <div class="diagram-arrow">→</div>
+        <div class="diagram-box dest">ingestion.trips</div>
+      </div>
+
+      <p>Let's walk through the code piece by piece:</p>
+
+      <h3 style="margin-top: 1rem;">1. The Bruin Header (Asset Metadata)</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span>📄 trips.py — header</span>
+          <span class="lang-badge">PYTHON</span>
+        </div>
+        <pre><code><span class="hl-cm">"""@bruin</span>
+<span class="hl-cm"></span>
+<span class="hl-kw">name</span>: ingestion.trips       <span class="hl-cm"># Table will be: ingestion.trips</span>
+<span class="hl-kw">type</span>: python                 <span class="hl-cm"># This asset runs Python code</span>
+<span class="hl-kw">image</span>: python:3.11           <span class="hl-cm"># Docker image to run in</span>
+<span class="hl-kw">connection</span>: duckdb-default   <span class="hl-cm"># Which DB connection to write to</span>
+
+<span class="hl-kw">materialization</span>:
+  <span class="hl-kw">type</span>: table                <span class="hl-cm"># Create a table (not a view)</span>
+  <span class="hl-kw">strategy</span>: append            <span class="hl-cm"># ADD new rows, never delete old ones</span>
+<span class="hl-cm"></span>
+<span class="hl-cm">@bruin"""</span></code></pre>
+      </div>
+      <p>
+        The <code>"""@bruin ... @bruin"""</code> block is a special docstring that Bruin reads.
+        It's how you declare metadata in Python assets. Key detail: <strong>strategy: append</strong> means
+        each run <em>adds</em> rows to the table — it never deletes previous data. This is safe for historical
+        data that shouldn't change.
+      </p>
+
+      <h3 style="margin-top: 1rem;">2. The materialize() Function</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span>📄 trips.py — materialize()</span>
+          <span class="lang-badge">PYTHON</span>
+        </div>
+        <div class="expandable-code" id="trips-py-code">
+          <pre><code><span class="hl-kw">def</span> <span class="hl-fn">materialize</span>():
+    <span class="hl-cm"># Bruin injects these environment variables:</span>
+    start_date = os.environ.get(<span class="hl-str">"BRUIN_START_DATE"</span>, <span class="hl-str">"2022-01-01"</span>)
+    end_date = os.environ.get(<span class="hl-str">"BRUIN_END_DATE"</span>, <span class="hl-str">"2022-02-01"</span>)
+    bruin_vars = json.loads(os.environ.get(<span class="hl-str">"BRUIN_VARS"</span>, <span class="hl-str">"{}"</span>))
+    taxi_types = bruin_vars.get(<span class="hl-str">"taxi_types"</span>, [<span class="hl-str">"yellow"</span>])
+
+    start = datetime.strptime(start_date, <span class="hl-str">"%Y-%m-%d"</span>)
+    end = datetime.strptime(end_date, <span class="hl-str">"%Y-%m-%d"</span>)
+
+    all_frames = []
+    current = start
+    <span class="hl-kw">while</span> current < end:
+        year_month = current.strftime(<span class="hl-str">"%Y-%m"</span>)
+        <span class="hl-kw">for</span> taxi_type <span class="hl-kw">in</span> taxi_types:
+            filename = <span class="hl-str">f"{taxi_type}_tripdata_{year_month}.parquet"</span>
+            url = <span class="hl-str">f"{BASE_URL}{filename}"</span>
+            <span class="hl-fn">print</span>(<span class="hl-str">f"Fetching {url}"</span>)
+            <span class="hl-kw">try</span>:
+                df = pd.read_parquet(url)     <span class="hl-cm"># Download Parquet directly</span>
+                df[<span class="hl-str">"taxi_type"</span>] = taxi_type   <span class="hl-cm"># Tag the source</span>
+                df[<span class="hl-str">"extracted_at"</span>] = datetime.utcnow()
+                all_frames.append(df)
+            <span class="hl-kw">except</span> Exception <span class="hl-kw">as</span> e:
+                <span class="hl-fn">print</span>(<span class="hl-str">f"  -> Failed: {e}"</span>)
+        current += relativedelta(months=<span class="hl-num">1</span>)
+
+    <span class="hl-kw">if not</span> all_frames:
+        <span class="hl-kw">return</span> pd.DataFrame()
+
+    result = pd.concat(all_frames, ignore_index=<span class="hl-num">True</span>)
+    <span class="hl-kw">return</span> result</code></pre>
+        </div>
+        <button class="code-expand-btn" onclick="toggleCode('trips-py-code', this)">▼ Show full code</button>
+      </div>
+
+      <h3 style="margin-top:1rem;">Key Concepts Explained</h3>
+      <div class="checks-grid">
+        <div class="check-item">
+          <div class="check-name">BRUIN_START_DATE / END_DATE</div>
+          <div class="check-desc">Bruin injects these as environment variables. For a monthly schedule, each run gets one month (e.g., 2022-01-01 to 2022-02-01).</div>
+        </div>
+        <div class="check-item">
+          <div class="check-name">BRUIN_VARS</div>
+          <div class="check-desc">A JSON string containing the pipeline variables. Here it carries <code>taxi_types: ["yellow", "green"]</code>.</div>
+        </div>
+        <div class="check-item">
+          <div class="check-name">Parquet</div>
+          <div class="check-desc">A columnar file format that's compressed and fast to read. Much better than CSV for large datasets. Pandas can read them directly from a URL.</div>
+        </div>
+        <div class="check-item">
+          <div class="check-name">materialize()</div>
+          <div class="check-desc">The magic function name. Bruin calls this and takes the returned DataFrame, then writes it to the database table defined in the header.</div>
+        </div>
+        <div class="check-item">
+          <div class="check-name">strategy: append</div>
+          <div class="check-desc">New rows are always added. Old rows are never touched. If you re-run a month, you get duplicate data — by design, the staging layer handles deduplication.</div>
+        </div>
+        <div class="check-item">
+          <div class="check-name">extracted_at</div>
+          <div class="check-desc">A timestamp column added by the code to track <em>when</em> each batch was fetched. Used later for deduplication (keep the newest extraction).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== STAGING ===== -->
+<section id="staging" class="reveal">
+  <span class="section-badge badge-stage">Layer 2</span>
+  <h2>Staging — Quality Control & Sorting</h2>
+
+  <div class="card">
+    <h3>staging/trips.sql — The Cleaning Station</h3>
+    <div class="analogy">
+      <div class="analogy-label">🏭 Analogy</div>
+      <p>
+        This is the <strong>quality control and sorting station</strong>. Raw materials arrive messy — duplicates,
+        inconsistent column names, cryptic codes. This station deduplicates, standardizes, and enriches the data
+        before it moves to the next phase.
+      </p>
+    </div>
+
+    <div class="diagram-flow">
+      <div class="diagram-box src">ingestion.trips</div>
+      <div class="diagram-arrow">+</div>
+      <div class="diagram-box data">ingestion.payment_lookup</div>
+      <div class="diagram-arrow">→</div>
+      <div class="diagram-box proc">staging/trips.sql</div>
+      <div class="diagram-arrow">→</div>
+      <div class="diagram-box dest">staging.trips</div>
+    </div>
+
+    <h3 style="margin-top:1rem;">Asset Header</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span>📄 trips.sql — header</span>
+        <span class="lang-badge">SQL</span>
+      </div>
+      <pre><code><span class="hl-kw">name</span>: staging.trips
+<span class="hl-kw">type</span>: duckdb.sql
+
+<span class="hl-kw">depends</span>:                          <span class="hl-cm"># Must run AFTER these assets</span>
+  - ingestion.trips
+  - ingestion.payment_lookup
+
+<span class="hl-kw">materialization</span>:
+  <span class="hl-kw">type</span>: table
+  <span class="hl-kw">strategy</span>: time_interval          <span class="hl-cm"># Only process new time windows</span>
+  <span class="hl-kw">incremental_key</span>: pickup_datetime <span class="hl-cm"># The column that defines "time"</span>
+  <span class="hl-kw">time_granularity</span>: timestamp</code></pre>
+    </div>
+
+    <div class="checks-grid" style="margin-top:1rem;">
+      <div class="check-item">
+        <div class="check-name">strategy: time_interval</div>
+        <div class="check-desc">Instead of reprocessing ALL data every run, only process the new time window. For a monthly schedule, each run only handles one month of new data. This is <strong>incremental processing</strong>.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">incremental_key</div>
+        <div class="check-desc">The column Bruin uses to know which rows are "new." It filters: <code>WHERE pickup_datetime >= start AND pickup_datetime < end</code>.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">depends</div>
+        <div class="check-desc">Declares that this asset <em>cannot run</em> until both <code>ingestion.trips</code> and <code>ingestion.payment_lookup</code> have finished. This is how Bruin builds the execution order (lineage/DAG).</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:1.5rem;">The SQL — Step by Step</h3>
+
+    <h3 style="margin-top:1rem;">Step 1: CTE "source" — Standardize + Rank</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span>📄 trips.sql — CTE: source</span>
+        <span class="lang-badge">SQL</span>
+      </div>
+      <pre><code><span class="hl-kw">WITH</span> source <span class="hl-kw">AS</span> (
+    <span class="hl-kw">SELECT</span>
+        *,
+        <span class="hl-cm">-- Yellow taxis use tpep_*, green use lpep_*. COALESCE picks whichever exists:</span>
+        <span class="hl-fn">COALESCE</span>(tpep_pickup_datetime, lpep_pickup_datetime) <span class="hl-kw">AS</span> pickup_datetime,
+        <span class="hl-fn">COALESCE</span>(tpep_dropoff_datetime, lpep_dropoff_datetime) <span class="hl-kw">AS</span> dropoff_datetime,
+
+        <span class="hl-cm">-- Deduplicate: rank rows by how recently they were extracted</span>
+        <span class="hl-fn">ROW_NUMBER</span>() <span class="hl-kw">OVER</span> (
+            <span class="hl-kw">PARTITION BY</span>
+                taxi_type, <span class="hl-cm">-- Group identical trips</span>
+                <span class="hl-fn">COALESCE</span>(tpep_pickup_datetime, lpep_pickup_datetime),
+                <span class="hl-fn">COALESCE</span>(tpep_dropoff_datetime, lpep_dropoff_datetime),
+                pu_location_id, do_location_id,
+                fare_amount, total_amount
+            <span class="hl-kw">ORDER BY</span> extracted_at <span class="hl-kw">DESC</span>  <span class="hl-cm">-- Keep the newest</span>
+        ) <span class="hl-kw">AS</span> row_num
+    <span class="hl-kw">FROM</span> ingestion.trips
+    <span class="hl-kw">WHERE</span> ... <span class="hl-cm">-- filtered to current time window via Jinja templates</span>
+)</code></pre>
+    </div>
+    <p>
+      <strong>Why ROW_NUMBER?</strong> Because the ingestion layer uses <code>append</code> strategy, re-running
+      a month creates duplicates. <code>ROW_NUMBER()</code> assigns rank 1 to the most recent extraction of each
+      unique trip. The next CTE keeps only rank 1.
+    </p>
+    <p>
+      <strong>Why COALESCE?</strong> Yellow and green taxis use different column names for the same data
+      (<code>tpep_*</code> vs <code>lpep_*</code>). <code>COALESCE</code> picks the non-null one, giving us
+      a single standardized <code>pickup_datetime</code> column.
+    </p>
+
+    <h3 style="margin-top:1.5rem;">Step 2: CTE "deduplicated" — Filter</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span>📄 trips.sql — CTE: deduplicated</span>
+        <span class="lang-badge">SQL</span>
+      </div>
+      <pre><code><span class="hl-kw">deduplicated AS</span> (
+    <span class="hl-kw">SELECT</span> * <span class="hl-kw">FROM</span> source <span class="hl-kw">WHERE</span> row_num = <span class="hl-num">1</span>   <span class="hl-cm">-- Only keep the "winner" of each group</span>
+)</code></pre>
+    </div>
+
+    <h3 style="margin-top:1.5rem;">Step 3: Final SELECT — Enrich & Hash</h3>
+    <div class="code-block">
+      <div class="code-header">
+        <span>📄 trips.sql — final SELECT</span>
+        <span class="lang-badge">SQL</span>
+      </div>
+      <pre><code><span class="hl-kw">SELECT</span>
+    <span class="hl-fn">md5</span>(                              <span class="hl-cm">-- Create a unique ID from trip attributes</span>
+        <span class="hl-fn">CAST</span>(d.taxi_type <span class="hl-kw">AS</span> VARCHAR) || <span class="hl-str">'-'</span> ||
+        <span class="hl-fn">CAST</span>(d.pickup_datetime <span class="hl-kw">AS</span> VARCHAR) || <span class="hl-str">'-'</span> ||
+        ...
+    ) <span class="hl-kw">AS</span> trip_id,
+    d.pickup_datetime,
+    d.dropoff_datetime,
+    d.taxi_type,
+    d.passenger_count,
+    d.trip_distance,
+    d.pu_location_id,
+    d.do_location_id,
+    <span class="hl-fn">CAST</span>(d.payment_type <span class="hl-kw">AS</span> INTEGER) <span class="hl-kw">AS</span> payment_type_id,
+    p.payment_type_name,              <span class="hl-cm">-- From the JOIN!</span>
+    d.fare_amount,
+    d.total_amount
+<span class="hl-kw">FROM</span> deduplicated d
+<span class="hl-kw">LEFT JOIN</span> ingestion.payment_lookup p  <span class="hl-cm">-- Enrich with human-readable names</span>
+    <span class="hl-kw">ON</span> <span class="hl-fn">CAST</span>(d.payment_type <span class="hl-kw">AS</span> INTEGER) = p.payment_type_id</code></pre>
+    </div>
+
+    <div class="checks-grid" style="margin-top:1rem;">
+      <div class="check-item">
+        <div class="check-name">md5() Hash</div>
+        <div class="check-desc">Creates a unique <code>trip_id</code> by hashing multiple columns together. Since the raw data has no natural unique key, we manufacture one. Two identical trips always produce the same hash.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">LEFT JOIN</div>
+        <div class="check-desc">Joins with <code>payment_lookup</code> to translate <code>payment_type=1</code> into <code>"credit_card"</code>. LEFT means: keep all trips even if no matching payment type is found.</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:1.5rem;">Before vs. After</h3>
+    <div class="data-compare">
+      <div class="compare-panel before">
+        <div class="compare-label">🔴 Before (ingestion.trips)</div>
+        <table class="mini-table">
+          <thead><tr><th>tpep_pickup</th><th>lpep_pickup</th><th>payment_type</th><th>fare</th><th>extracted_at</th></tr></thead>
+          <tbody>
+            <tr><td>2022-01-15 08:30</td><td>NULL</td><td>1</td><td>12.50</td><td>Jan 20 10:00</td></tr>
+            <tr><td>2022-01-15 08:30</td><td>NULL</td><td>1</td><td>12.50</td><td>Jan 25 14:00</td></tr>
+            <tr><td>NULL</td><td>2022-01-15 09:15</td><td>2</td><td>8.00</td><td>Jan 20 10:00</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="compare-panel after">
+        <div class="compare-label">🟢 After (staging.trips)</div>
+        <table class="mini-table">
+          <thead><tr><th>trip_id</th><th>pickup_datetime</th><th>payment_type_name</th><th>fare</th></tr></thead>
+          <tbody>
+            <tr><td>a3f2...</td><td>2022-01-15 08:30</td><td>credit_card</td><td>12.50</td></tr>
+            <tr><td>b7c1...</td><td>2022-01-15 09:15</td><td>cash</td><td>8.00</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p style="font-size:0.85rem;color:var(--text2);">
+      Notice: the duplicate yellow taxi trip (rows 1 & 2) was deduplicated — only the newer extraction survived.
+      The green taxi's <code>lpep_pickup</code> became a unified <code>pickup_datetime</code>. Payment code <code>1</code>
+      became <code>credit_card</code>.
+    </p>
+
+    <h3 style="margin-top:1.5rem;">Quality Checks on staging.trips</h3>
+    <div class="checks-grid">
+      <div class="check-item">
+        <div class="check-name">trip_id: not_null + unique</div>
+        <div class="check-desc">Every row must have a unique identifier.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">taxi_type: accepted_values</div>
+        <div class="check-desc">Only "yellow" or "green" allowed. Catches data corruption.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">trip_distance: non_negative</div>
+        <div class="check-desc">A trip can't have negative distance.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">Custom: no_duplicate_trips</div>
+        <div class="check-desc">A SQL query that counts duplicates — must return 0. Extra safety net beyond the unique check.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== REPORTS ===== -->
+<section id="reports" class="reveal">
+  <span class="section-badge badge-report">Layer 3</span>
+  <h2>Reports — The Manager's Summary</h2>
+
+  <div class="card">
+    <h3>reports/trips_report.sql — Daily Aggregates</h3>
+    <div class="analogy">
+      <div class="analogy-label">🏭 Analogy</div>
+      <p>
+        This is the <strong>summary report for the factory manager</strong>. Instead of looking at millions
+        of individual trips, the manager wants: "On January 15, how many yellow taxi credit card trips were there?
+        What was the total revenue?" This asset answers those questions.
+      </p>
+    </div>
+
+    <div class="diagram-flow">
+      <div class="diagram-box src">staging.trips</div>
+      <div class="diagram-arrow">→</div>
+      <div class="diagram-box proc">GROUP BY aggregation</div>
+      <div class="diagram-arrow">→</div>
+      <div class="diagram-box dest">reports.trips_report</div>
+    </div>
+
+    <div class="diagram-flow" style="margin-top:0.5rem;">
+      <div class="diagram-box data" style="font-size:0.75rem;">3,000,000 detailed rows</div>
+      <div class="diagram-arrow">→</div>
+      <div class="diagram-box data" style="font-size:0.75rem;">~5,000 summary rows</div>
+    </div>
+
+    <div class="code-block">
+      <div class="code-header">
+        <span>📄 trips_report.sql</span>
+        <span class="lang-badge">SQL</span>
+      </div>
+      <pre><code><span class="hl-kw">SELECT</span>
+    <span class="hl-fn">CAST</span>(pickup_datetime <span class="hl-kw">AS</span> DATE) <span class="hl-kw">AS</span> pickup_date,   <span class="hl-cm">-- Group by date (not time)</span>
+    taxi_type,                                        <span class="hl-cm">-- yellow or green</span>
+    payment_type_name,                                <span class="hl-cm">-- credit_card, cash, etc.</span>
+    <span class="hl-fn">COUNT</span>(*) <span class="hl-kw">AS</span> trip_count,                           <span class="hl-cm">-- How many trips?</span>
+    <span class="hl-fn">SUM</span>(passenger_count) <span class="hl-kw">AS</span> total_passengers,           <span class="hl-cm">-- Total passengers</span>
+    <span class="hl-fn">SUM</span>(trip_distance) <span class="hl-kw">AS</span> total_distance,               <span class="hl-cm">-- Total miles driven</span>
+    <span class="hl-fn">SUM</span>(fare_amount) <span class="hl-kw">AS</span> total_fare,                     <span class="hl-cm">-- Total fare collected</span>
+    <span class="hl-fn">SUM</span>(total_amount) <span class="hl-kw">AS</span> total_amount                    <span class="hl-cm">-- Total amount charged</span>
+<span class="hl-kw">FROM</span> staging.trips
+<span class="hl-kw">WHERE</span> pickup_datetime >= <span class="hl-str">'{{ start_datetime }}'</span>
+  <span class="hl-kw">AND</span> pickup_datetime < <span class="hl-str">'{{ end_datetime }}'</span>
+<span class="hl-kw">GROUP BY</span>
+    <span class="hl-fn">CAST</span>(pickup_datetime <span class="hl-kw">AS</span> DATE),
+    taxi_type,
+    payment_type_name</code></pre>
+    </div>
+
+    <h3 style="margin-top:1rem;">What GROUP BY Does</h3>
+    <p>
+      Imagine you have 3 million rows of individual trips. <code>GROUP BY</code> collapses them into groups
+      where every row shares the same date + taxi type + payment method. Then the aggregate functions
+      (<code>COUNT</code>, <code>SUM</code>) compute summaries for each group.
+    </p>
+
+    <div class="data-compare">
+      <div class="compare-panel before">
+        <div class="compare-label">🔴 Before (staging.trips)</div>
+        <table class="mini-table">
+          <thead><tr><th>pickup</th><th>taxi</th><th>payment</th><th>fare</th><th>distance</th></tr></thead>
+          <tbody>
+            <tr><td>Jan 15 08:30</td><td>yellow</td><td>credit_card</td><td>12.50</td><td>3.2</td></tr>
+            <tr><td>Jan 15 09:15</td><td>yellow</td><td>credit_card</td><td>8.00</td><td>1.8</td></tr>
+            <tr><td>Jan 15 10:00</td><td>yellow</td><td>cash</td><td>15.00</td><td>5.1</td></tr>
+            <tr><td>Jan 15 11:30</td><td>green</td><td>credit_card</td><td>22.00</td><td>7.4</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="compare-panel after">
+        <div class="compare-label">🟢 After (reports.trips_report)</div>
+        <table class="mini-table">
+          <thead><tr><th>date</th><th>taxi</th><th>payment</th><th>trips</th><th>fare</th><th>dist</th></tr></thead>
+          <tbody>
+            <tr><td>Jan 15</td><td>yellow</td><td>credit_card</td><td>2</td><td>20.50</td><td>5.0</td></tr>
+            <tr><td>Jan 15</td><td>yellow</td><td>cash</td><td>1</td><td>15.00</td><td>5.1</td></tr>
+            <tr><td>Jan 15</td><td>green</td><td>credit_card</td><td>1</td><td>22.00</td><td>7.4</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="checks-grid" style="margin-top:1rem;">
+      <div class="check-item">
+        <div class="check-name">Jinja Templates</div>
+        <div class="check-desc"><code>{{ start_datetime }}</code> and <code>{{ end_datetime }}</code> are replaced by Bruin with the current run's time window. This is how incremental processing works in SQL assets.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">Composite Primary Key</div>
+        <div class="check-desc"><code>pickup_date</code> + <code>taxi_type</code> + <code>payment_type_name</code> together form the primary key. Each unique combination gets exactly one summary row.</div>
+      </div>
+      <div class="check-item">
+        <div class="check-name">non_negative checks</div>
+        <div class="check-desc">Trip count, distance, and passengers can never be negative. These checks catch bugs in upstream logic.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== DATA FLOW WALKTHROUGH ===== -->
+<section id="walkthrough" class="reveal">
+  <h2>Data Flow Walkthrough</h2>
+  <p>Follow a single taxi trip record as it flows through every stage of the pipeline.</p>
+
+  <div class="flow-container">
+    <div class="progress-bar" id="flow-progress"></div>
+
+    <div class="flow-stages" id="flow-stages">
+      <div class="flow-stage" id="fs-0">
+        <div class="stage-title">🌐 Source</div>
+        <div class="stage-desc">NYC TLC Website</div>
+      </div>
+      <div class="flow-arrow-container"><span>→</span></div>
+      <div class="flow-stage" id="fs-1">
+        <div class="stage-title">📥 Ingest</div>
+        <div class="stage-desc">trips.py</div>
+      </div>
+      <div class="flow-arrow-container"><span>→</span></div>
+      <div class="flow-stage" id="fs-2">
+        <div class="stage-title">🔧 Stage</div>
+        <div class="stage-desc">trips.sql</div>
+      </div>
+      <div class="flow-arrow-container"><span>→</span></div>
+      <div class="flow-stage" id="fs-3">
+        <div class="stage-title">📊 Report</div>
+        <div class="stage-desc">trips_report.sql</div>
+      </div>
+      <div class="flow-arrow-container"><span>→</span></div>
+      <div class="flow-stage" id="fs-4">
+        <div class="stage-title">🗄️ DuckDB</div>
+        <div class="stage-desc">Final Storage</div>
+      </div>
+    </div>
+
+    <div class="flow-controls">
+      <button class="flow-btn" id="flow-prev" onclick="flowStep(-1)" disabled>← Previous</button>
+      <button class="flow-btn" id="flow-play" onclick="flowAutoPlay()">▶ Auto Play</button>
+      <button class="flow-btn" id="flow-next" onclick="flowStep(1)">Next →</button>
+    </div>
+
+    <div class="flow-status" id="flow-status">
+      Click "Next" to begin the walkthrough.
+    </div>
+  </div>
+</section>
+
+<!-- ===== GLOSSARY ===== -->
+<section id="glossary" class="reveal">
+  <span class="section-badge badge-glossary">Reference</span>
+  <h2>Jargon Glossary</h2>
+  <p>Every technical term used in this pipeline, explained in plain English.</p>
+
+  <div class="glossary-grid">
+    <div class="glossary-item">
+      <div class="glossary-term">Asset</div>
+      <div class="glossary-def">A single unit of work in the pipeline — a SQL query, a Python script, or a CSV seed. Each asset produces one database table or view.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Pipeline</div>
+      <div class="glossary-def">A collection of assets that run together on a schedule. Defined by a <code>pipeline.yml</code> file. Think of it as the entire factory.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Materialization</div>
+      <div class="glossary-def">The act of writing query results to a physical database table. "Materializing" an asset means running its code and saving the output.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Strategy: append</div>
+      <div class="glossary-def">Always insert new rows, never touch existing ones. Simple but can create duplicates if the same data is processed twice.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Strategy: time_interval</div>
+      <div class="glossary-def">Only process data within the current time window. Deletes old data for that window first, then inserts new data. Prevents duplicates for reprocessed periods.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Strategy: merge</div>
+      <div class="glossary-def">Upsert strategy — insert new rows, update existing ones (matched by primary key). Not used in this pipeline but common in Bruin.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Seed</div>
+      <div class="glossary-def">A static CSV file loaded directly into the database. Used for small reference/lookup data that rarely changes.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Incremental Key</div>
+      <div class="glossary-def">The column used to identify which rows are "new" in time_interval strategy. Usually a timestamp like <code>pickup_datetime</code>.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Quality Checks</div>
+      <div class="glossary-def">Automated validations that run after an asset materializes. If a check fails, the pipeline alerts you. Examples: not_null, unique, non_negative.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Full Refresh</div>
+      <div class="glossary-def">Reprocessing ALL data from scratch, ignoring incremental logic. Used when you change business logic and need to recompute historical data.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Backfill</div>
+      <div class="glossary-def">Processing historical time windows that were missed or need reprocessing. E.g., running the pipeline for every month from Jan 2022 to Dec 2023.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Lineage / DAG</div>
+      <div class="glossary-def">The dependency graph showing which assets depend on which. A DAG (Directed Acyclic Graph) ensures assets run in the correct order. Defined by <code>depends</code> declarations.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Dependencies</div>
+      <div class="glossary-def">Assets that must finish before another can start. <code>staging.trips</code> depends on <code>ingestion.trips</code>, so ingestion always runs first.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Environment</div>
+      <div class="glossary-def">A named configuration set (e.g., "default", "production"). Each environment can have different database connections, letting you test without affecting production.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Connection</div>
+      <div class="glossary-def">A named reference to an external system (database, API, etc.). Defined in <code>.bruin.yml</code> so assets don't hardcode credentials.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Parquet</div>
+      <div class="glossary-def">A columnar file format designed for analytics. Stores data by column (not row), enabling fast reads and excellent compression. The NYC TLC publishes data in this format.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">CTE (Common Table Expression)</div>
+      <div class="glossary-def">A <code>WITH ... AS (...)</code> clause in SQL. Creates a temporary, named result set you can reference later in the query. Like a variable for SQL.</div>
+    </div>
+    <div class="glossary-item">
+      <div class="glossary-term">Jinja Templates</div>
+      <div class="glossary-def"><code>{{ start_datetime }}</code> syntax in SQL. Bruin replaces these placeholders with actual values before running the query. Used for dynamic time filtering.</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- FLOATING GLOSSARY FAB -->
+<button class="glossary-fab" onclick="toggleGlossaryPanel()" title="Quick Glossary">📖</button>
+<div class="glossary-panel" id="glossary-panel">
+  <h3>Quick Glossary</h3>
+  <div class="glossary-entry"><div class="g-term">Asset</div><div class="g-def">A single unit of work — SQL query, Python script, or CSV seed.</div></div>
+  <div class="glossary-entry"><div class="g-term">Pipeline</div><div class="g-def">Collection of assets that run together on a schedule.</div></div>
+  <div class="glossary-entry"><div class="g-term">Materialization</div><div class="g-def">Writing query results to a physical DB table.</div></div>
+  <div class="glossary-entry"><div class="g-term">Append</div><div class="g-def">Strategy: always insert new rows, never delete.</div></div>
+  <div class="glossary-entry"><div class="g-term">Time Interval</div><div class="g-def">Strategy: only process the current time window.</div></div>
+  <div class="glossary-entry"><div class="g-term">Seed</div><div class="g-def">Static CSV loaded into the database.</div></div>
+  <div class="glossary-entry"><div class="g-term">Incremental Key</div><div class="g-def">Column that defines what's "new" data.</div></div>
+  <div class="glossary-entry"><div class="g-term">Quality Checks</div><div class="g-def">Automated validations after materialization.</div></div>
+  <div class="glossary-entry"><div class="g-term">Lineage / DAG</div><div class="g-def">Dependency graph — which assets run before which.</div></div>
+  <div class="glossary-entry"><div class="g-term">Backfill</div><div class="g-def">Processing missed or historical time windows.</div></div>
+  <div class="glossary-entry"><div class="g-term">Parquet</div><div class="g-def">Columnar file format — fast & compressed.</div></div>
+  <div class="glossary-entry"><div class="g-term">Jinja</div><div class="g-def">Template syntax: <code>{{ var }}</code> replaced at runtime.</div></div>
+  <div class="glossary-entry"><div class="g-term">CTE</div><div class="g-def">WITH clause — temporary named query result.</div></div>
+</div>
+
+<script>
+// ===== THEME TOGGLE =====
+function toggleTheme() {
+  document.body.classList.toggle('light');
+  localStorage.setItem('theme', document.body.classList.contains('light') ? 'light' : 'dark');
+}
+if (localStorage.getItem('theme') === 'light') document.body.classList.add('light');
+
+// ===== TAB SWITCHING =====
+function switchTab(e, tabId) {
+  document.querySelectorAll('.layer-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.layer-content').forEach(c => c.classList.remove('active'));
+  e.target.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+
+// ===== CODE EXPAND =====
+function toggleCode(id, btn) {
+  const el = document.getElementById(id);
+  el.classList.toggle('expanded');
+  btn.textContent = el.classList.contains('expanded') ? '▲ Collapse' : '▼ Show full code';
+}
+
+// ===== GLOSSARY PANEL =====
+function toggleGlossaryPanel() {
+  document.getElementById('glossary-panel').classList.toggle('open');
+}
+
+// ===== NAV ACTIVE STATE =====
+const sections = document.querySelectorAll('section[id]');
+const navLinks = document.querySelectorAll('nav .nav-links a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(s => {
+    if (window.scrollY >= s.offsetTop - 120) current = s.id;
+  });
+  navLinks.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+});
+
+// ===== REVEAL ON SCROLL =====
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+// ===== DATA FLOW WALKTHROUGH =====
+const flowSteps = [
+  {
+    stage: -1,
+    text: 'Click "Next" to follow a single taxi trip record through the pipeline.'
+  },
+  {
+    stage: 0,
+    text: '🌐 <strong>Source:</strong> A yellow taxi picks up a passenger at 08:30 AM on Jan 15, 2022. The trip data is recorded by the taxi\'s meter and uploaded to the NYC TLC website as a Parquet file: <code>yellow_tripdata_2022-01.parquet</code>.'
+  },
+  {
+    stage: 1,
+    text: '📥 <strong>Ingestion:</strong> <code>trips.py</code> downloads the Parquet file, reads it with Pandas, adds <code>taxi_type="yellow"</code> and <code>extracted_at=now()</code>, then returns the DataFrame. Bruin writes it to <code>ingestion.trips</code> using <strong>append</strong> strategy.'
+  },
+  {
+    stage: 1,
+    text: '📥 <strong>Ingestion (detail):</strong> The raw row has <code>tpep_pickup_datetime=2022-01-15 08:30</code>, <code>tpep_dropoff_datetime=2022-01-15 08:52</code>, <code>payment_type=1</code>, <code>fare_amount=12.50</code>, <code>total_amount=16.30</code>. These column names are specific to yellow taxis (<code>tpep_*</code>).'
+  },
+  {
+    stage: 2,
+    text: '🔧 <strong>Staging (step 1):</strong> <code>COALESCE(tpep_pickup_datetime, lpep_pickup_datetime)</code> standardizes the pickup column. Since this is a yellow taxi, <code>tpep_*</code> is used. The result: <code>pickup_datetime = 2022-01-15 08:30</code>.'
+  },
+  {
+    stage: 2,
+    text: '🔧 <strong>Staging (step 2):</strong> <code>ROW_NUMBER()</code> checks for duplicates. If this trip was ingested twice (because someone re-ran the pipeline), only the row with the latest <code>extracted_at</code> gets <code>row_num = 1</code>. Duplicates are discarded.'
+  },
+  {
+    stage: 2,
+    text: '🔧 <strong>Staging (step 3):</strong> <code>LEFT JOIN payment_lookup</code> translates <code>payment_type=1</code> → <code>payment_type_name="credit_card"</code>. An <code>md5()</code> hash creates a unique <code>trip_id</code> from the trip\'s key attributes.'
+  },
+  {
+    stage: 3,
+    text: '📊 <strong>Report:</strong> Our trip is now one of ~50,000 yellow credit card trips on Jan 15. <code>GROUP BY date, taxi_type, payment_type_name</code> collapses them all into a single summary row: <code>trip_count=50000, total_fare=625000, ...</code>'
+  },
+  {
+    stage: 4,
+    text: '🗄️ <strong>DuckDB:</strong> The final aggregated row is stored in <code>reports.trips_report</code>. Analysts can now query: "What was the total revenue for yellow taxis on Jan 15?" — and get an instant answer from this pre-computed table.'
+  },
+  {
+    stage: 4,
+    text: '✅ <strong>Complete!</strong> Our single trip record traveled from a Parquet file on the internet → raw ingestion table → cleaned staging table → aggregated report. The entire journey is automated, incremental, and quality-checked at every step.'
+  }
+];
+
+let currentFlowStep = 0;
+const totalFlowSteps = flowSteps.length;
+
+// Build progress dots
+const progressBar = document.getElementById('flow-progress');
+for (let i = 0; i < totalFlowSteps; i++) {
+  const dot = document.createElement('div');
+  dot.className = 'progress-dot' + (i === 0 ? ' active' : '');
+  dot.id = 'dot-' + i;
+  progressBar.appendChild(dot);
+}
+
+function updateFlow() {
+  const step = flowSteps[currentFlowStep];
+
+  // Update stages
+  for (let i = 0; i < 5; i++) {
+    const el = document.getElementById('fs-' + i);
+    el.classList.toggle('active', i === step.stage);
+  }
+
+  // Update status
+  document.getElementById('flow-status').innerHTML = step.text;
+
+  // Update buttons
+  document.getElementById('flow-prev').disabled = currentFlowStep === 0;
+  document.getElementById('flow-next').disabled = currentFlowStep === totalFlowSteps - 1;
+
+  // Update dots
+  for (let i = 0; i < totalFlowSteps; i++) {
+    const dot = document.getElementById('dot-' + i);
+    dot.className = 'progress-dot';
+    if (i < currentFlowStep) dot.classList.add('done');
+    if (i === currentFlowStep) dot.classList.add('active');
+  }
+}
+
+function flowStep(dir) {
+  currentFlowStep = Math.max(0, Math.min(totalFlowSteps - 1, currentFlowStep + dir));
+  updateFlow();
+}
+
+let autoPlayInterval = null;
+function flowAutoPlay() {
+  const btn = document.getElementById('flow-play');
+  if (autoPlayInterval) {
+    clearInterval(autoPlayInterval);
+    autoPlayInterval = null;
+    btn.textContent = '▶ Auto Play';
+    return;
+  }
+  btn.textContent = '⏸ Pause';
+  if (currentFlowStep >= totalFlowSteps - 1) { currentFlowStep = 0; updateFlow(); }
+  autoPlayInterval = setInterval(() => {
+    if (currentFlowStep >= totalFlowSteps - 1) {
+      clearInterval(autoPlayInterval);
+      autoPlayInterval = null;
+      btn.textContent = '▶ Auto Play';
+      return;
+    }
+    flowStep(1);
+  }, 3000);
+}
+
+updateFlow();
+</script>
+</body>
+</html>
