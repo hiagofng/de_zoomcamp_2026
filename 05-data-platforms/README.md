@@ -59,7 +59,7 @@ How do you override the `taxi_types` variable to only process yellow taxis?
 
 ### ANSWER
 
---> 'bruin run --var 'taxi_types=["yellow"]'
+--> `bruin run --var 'taxi_types=["yellow"]`
 
 Because bruin uses the --var flag to override pipeline variables and since taxi_types is defined as an array in pipeline.yml, the value must be passed as a JSON array.
 
