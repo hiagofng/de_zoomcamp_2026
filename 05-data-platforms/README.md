@@ -1,4 +1,4 @@
-# Module 5 Homework: Data Platforms with Bruin
+# Module 5 Homework: Data Platforms with Bruin -> WITH ANSWERS
 
 In this homework, we'll use the Bruin project in `05-data-platforms/` to build data pipelines with DuckDB and answer questions about Bruin concepts and commands.
 
