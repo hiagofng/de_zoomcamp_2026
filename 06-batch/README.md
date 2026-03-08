@@ -23,7 +23,8 @@ What's the output?
 
 ### ANSWER
 
-> [SOLUTION] (06-batch/04_pyspark.ipynb)
+[SOLUTION LINK] (06-batch/04_pyspark.ipynb)
+
 [25577435, 25608464, 25602315, 25594240]
 24.409879207611084 MB
 
