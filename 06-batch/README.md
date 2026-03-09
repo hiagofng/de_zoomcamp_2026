@@ -24,9 +24,7 @@ What's the output?
 ### ANSWER
 
 > [SOLUTION LINK](04_pyspark.ipynb)
-
->[25577435, 25608464, 25602315, 25594240]
->24.409879207611084 MB
+> '4.1.1'
 
 ## Question 2: Yellow November 2025
 
@@ -41,6 +39,10 @@ What is the average size of the Parquet (ending with .parquet extension) Files t
 - 75MB
 - 100MB
 
+### ANSWER
+
+> [SOLUTION LINK](04_pyspark.ipynb)
+>24.409879207611084 MB (25MB)
 
 ## Question 3: Count records
 
@@ -53,6 +55,15 @@ Consider only trips that started on the 15th of November.
 - 162,604
 - 225,768
 
+## ANSWER
+
+> [SOLUTION LINK](04_pyspark.ipynb)
+>+--------+
+>|count(1)|
+>+--------+
+>|  162608|
+>+--------+
+
 
 ## Question 4: Longest trip
 
@@ -63,6 +74,14 @@ What is the length of the longest trip in the dataset in hours?
 - 90.6
 - 134.5
 
+## ANSWER
+
+> [SOLUTION LINK](04_pyspark.ipynb)
++-----------------+
+|    trip_duration|
++-----------------+
+|90.64666666666666|
++-----------------+
 
 ## Question 5: User Interface
 
@@ -73,7 +92,9 @@ Spark's User Interface which shows the application's dashboard runs on which loc
 - 4040
 - 8080
 
+## ANSWER
 
+RUNS ON PORT 4040
 
 ## Question 6: Least frequent pickup location zone
 
@@ -91,6 +112,11 @@ Using the zone lookup data and the Yellow November 2025 data, what is the name o
 - Jamaica Bay
 
 If multiple answers are correct, select any
+
+## ANSWER
+
+> [SOLUTION LINK](04_pyspark.ipynb)
+Row(Zone="Governor's Island/Ellis Island/Liberty Island", total_trips=1)
 
 ## Submitting the solutions
 
