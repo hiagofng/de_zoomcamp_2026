@@ -115,8 +115,11 @@ How long did it take to send the data?
 - 300 seconds
 
 >[CONSUMER](./homework/notebooks/consumer.ipynb)
+
 >[PRODUCER](./homework/notebooks/producer.ipynb)
+
 > took 12.60 seconds
+
 >ANSWER: ~10s
 
 
@@ -135,13 +138,17 @@ How many trips have `trip_distance` > 5?
 - 9506
 
 >[CONSUMER](./homework/notebooks/consumer.ipynb)
+
 >[PRODUCER](./homework/notebooks/producer.ipynb)
+
 >postgres@localhost:postgres> select count(*) from processed_events where trip_distance > 5;
+
 >+-------+
 >| count |
 >|-------|
 >| 8506  |
 >+-------+
+
 >ANSWER: 8506
 
 
