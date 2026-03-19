@@ -48,6 +48,7 @@ def create_events_aggregated_sink(t_env):
     return table_name
 
 
+
 def log_aggregation():
     env = StreamExecutionEnvironment.get_execution_environment()
     env.enable_checkpointing(10 * 1000)

@@ -50,8 +50,8 @@ services:
     ports:
       - "8081:8081"
     volumes:
-      - ./:/opt/flink/usrlib
-      - ./src/:/opt/src
+      - ./homework/:/opt/flink/usrlib
+      - ./homework/src/:/opt/src
     command: jobmanager
     environment:
       - |
@@ -66,8 +66,8 @@ services:
       - "6121"
       - "6122"
     volumes:
-      - ./:/opt/flink/usrlib
-      - ./src/:/opt/src
+      - ./homework/:/opt/flink/usrlib
+      - ./homework/src/:/opt/src
     depends_on:
       - jobmanager
     command: taskmanager --taskmanager.registration.timeout 5 min

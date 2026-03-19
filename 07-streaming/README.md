@@ -177,7 +177,7 @@ Important notes for the Flink jobs:
 - Place your job files in `workshop/src/job/` - this directory is
   mounted into the Flink containers at `/opt/src/job/`
 - Submit jobs with:
-  `docker exec -it workshop-jobmanager-1 flink run -py /opt/src/job/your_job.py`
+  `docker exec -it 07-streaming-jobmanager-1 flink run -py /opt/src/job/aggregation_job_pickup_location.py`
 - The `green-trips` topic has 1 partition, so set parallelism to 1
   in your Flink jobs (`env.set_parallelism(1)`). With higher parallelism,
   idle consumer subtasks prevent the watermark from advancing.
@@ -201,7 +201,7 @@ After the job processes all data, query the results:
 
 ```sql
 SELECT PULocationID, num_trips
-FROM <your_table>
+FROM processed_events_aggregated
 ORDER BY num_trips DESC
 LIMIT 3;
 ```
@@ -213,8 +213,23 @@ Which `PULocationID` had the most trips in a single 5-minute window?
 - 75
 - 166
 
+>postgres@localhost:postgres> SELECT PULocationID, num_trips                                                  
+> FROM processed_events_aggregated                                                                              
+> ORDER BY num_trips DESC                                                                                       
+> LIMIT 3;                                                                                                      
+>+--------------+-----------+                                                                                   
+>| pulocationid | num_trips |                                                                                   
+>|--------------+-----------|                                                                                   
+>| 74           | 15        |                                                                                   
+>| 74           | 14        |                                                                                   
+>| 74           | 13        |                                                                                   
+>+--------------+-----------+  
+
+>ANSWER? 74
 
 ## Question 5. Session window - longest streak
+
+`docker exec -it 07-streaming-jobmanager-1 flink run -py /opt/src/job/aggregation_job_pickup_location.py`
 
 Create another Flink job that uses a session window with a 5-minute gap
 on `PULocationID`, using `lpep_pickup_datetime` as the event time
@@ -232,6 +247,17 @@ How many trips were in the longest session?
 - 31
 - 51
 - 81
+
+>postgres@localhost:postgres> select window_end - window_start as window_length, num_trips from processed_events_aggregated_longest_streak order by 1 desc limit 3
+>+---------------+-----------+
+>| window_length | num_trips |
+>|---------------+-----------|
+>| 1:41:26       | 81        |
+>| 1:32:08       | 69        |
+>| 1:31:10       | 72        |
+>+---------------+-----------+
+
+>ANSWER: 81
 
 
 ## Question 6. Tumbling window - largest tip
