@@ -67,6 +67,7 @@ What version of Redpanda are you running?
 >ANSWER:
 > Version 25.3.9
 
+
 ## Question 2. Sending data to Redpanda
 
 Create a topic called `green-trips`:
@@ -213,6 +214,9 @@ Which `PULocationID` had the most trips in a single 5-minute window?
 - 75
 - 166
 
+
+>[JOB](\homework\src\job\aggregation_job_pickup_location.py)
+
 >postgres@localhost:postgres> SELECT PULocationID, num_trips                                                  
 > FROM processed_events_aggregated                                                                              
 > ORDER BY num_trips DESC                                                                                       
@@ -248,6 +252,8 @@ How many trips were in the longest session?
 - 51
 - 81
 
+>[JOB](/homework/src/job/aggregation_job_longest_streak.py)
+
 >postgres@localhost:postgres> select window_end - window_start as window_length, num_trips from processed_events_aggregated_longest_streak order by 1 desc limit 3
 >+---------------+-----------+
 >| window_length | num_trips |
@@ -271,6 +277,19 @@ Which hour had the highest total tip amount?
 - 2025-10-16 18:00:00
 - 2025-10-22 08:00:00
 - 2025-10-30 16:00:00
+
+[JOB](/homework/src/job/aggregation_job_largest_tip.py)
+
+>postgres@localhost:postgres> select * from processed_events_aggregated_largest_tip order by tip_amount  
+> desc limit 1;
+>+---------------------+------------+
+>| window_start        | tip_amount |
+>|---------------------+------------|
+>| 2025-10-16 18:00:00 | 510.86     |
+>+---------------------+------------+
+
+>ANSWER: 2025-10-16 18:00:00
+
 
 
 ## Submitting the solutions
