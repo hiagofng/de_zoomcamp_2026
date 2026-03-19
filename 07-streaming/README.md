@@ -114,6 +114,11 @@ How long did it take to send the data?
 - 120 seconds
 - 300 seconds
 
+>[CONSUMER](./homework/notebooks/consumer.ipynb)
+>[PRODUCER](./homework/notebooks/producer.ipynb)
+> took 12.60 seconds
+>ANSWER: ~10s
+
 
 ## Question 3. Consumer - trip distance
 
@@ -128,6 +133,16 @@ How many trips have `trip_distance` > 5?
 - 7506
 - 8506
 - 9506
+
+>[CONSUMER](./homework/notebooks/consumer.ipynb)
+>[PRODUCER](./homework/notebooks/producer.ipynb)
+>postgres@localhost:postgres> select count(*) from processed_events where trip_distance > 5;
+>+-------+
+>| count |
+>|-------|
+>| 8506  |
+>+-------+
+>ANSWER: 8506
 
 
 ## Part 2: PyFlink (Questions 4-6)
